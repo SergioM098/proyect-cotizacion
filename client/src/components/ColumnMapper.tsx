@@ -29,7 +29,6 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
   const [sourceBMapping, setSourceBMapping] = useState<Record<string, string>>(
     initMapping(uploadData.sourceBAutoMapping)
   );
-  const [dateTolerance, setDateTolerance] = useState(3);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +59,6 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
         reconciliationType,
         sourceAMapping: buildColumnMapping(sourceAMapping),
         sourceBMapping: buildColumnMapping(sourceBMapping),
-        dateTolerance,
         amountTolerance: 0.01,
       });
       onReconcile(result);
@@ -90,23 +88,6 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
         mapping={sourceBMapping}
         onMappingChange={setSourceBMapping}
       />
-
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <h3 className="font-semibold text-gray-800 mb-4">Configuraci&oacute;n</h3>
-        <div className="flex items-center gap-4">
-          <label className="text-sm text-gray-600">
-            Tolerancia de fechas (d&iacute;as):
-          </label>
-          <input
-            type="number"
-            min={0}
-            max={30}
-            value={dateTolerance}
-            onChange={(e) => setDateTolerance(Number(e.target.value))}
-            className="w-20 px-3 py-1.5 border rounded-lg text-sm"
-          />
-        </div>
-      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">

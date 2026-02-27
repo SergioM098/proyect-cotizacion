@@ -7,93 +7,77 @@ import type {
   ReconciliationSummary,
   ReconciliationType,
 } from '../../../shared/types.js';
-import { datesMatch, datesWithinTolerance, dateDifferenceInDays } from '../utils/date-utils.js';
+import { dateDifferenceInDays } from '../utils/date-utils.js';
 import { amountsMatch, amountDifference } from '../utils/amount-utils.js';
-import { stringSimilarity, referencesMatch } from '../utils/string-utils.js';
-
-interface MatchConfig {
-  amountExact: boolean;
-  amountTolerance?: number;
-  dateExact: boolean;
-  dateTolerance?: number;
-  referenceRequired: boolean;
-  descriptionSimilarity?: number;
-  method: MatchMethod;
-  confidence: number;
-}
+import { referencesMatch } from '../utils/string-utils.js';
 
 /**
- * Ejecuta la conciliación con algoritmo de 5 pasadas.
- * Funciona tanto para conciliación bancaria como entre cuentas.
+ * Ejecuta la conciliación cruzando por montos.
+ * Usa referencia, fecha y descripción solo como desempate
+ * cuando hay múltiples candidatos con el mismo monto.
  */
 export function reconcile(
   sourceATransactions: Transaction[],
   sourceBTransactions: Transaction[],
-  config: { dateTolerance: number; amountTolerance: number },
+  config: { dateTolerance?: number; amountTolerance: number },
   reconciliationType: ReconciliationType = 'bank'
 ): ReconciliationResult {
   const remainingA = [...sourceATransactions];
   const remainingB = [...sourceBTransactions];
   const matched: MatchedPair[] = [];
 
-  // Pasada 1: Match exacto (monto + fecha + referencia)
-  matchPass(remainingA, remainingB, matched, {
-    amountExact: true,
-    dateExact: true,
+  // En conciliación bancaria, los signos son opuestos:
+  // Extracto +1000 (depósito) = Libro -1000 (débito al activo banco)
+  // Extracto -500 (pago) = Libro +500 (crédito al activo banco)
+  const negateB = reconciliationType === 'bank';
+
+  // Pasada 1: Monto exacto + misma referencia (confianza 100%)
+  matchByAmount(remainingA, remainingB, matched, {
+    amountTolerance: 0,
     referenceRequired: true,
     method: 'exact',
     confidence: 1.0,
+    negateB,
   });
 
-  // Pasada 2: Monto + Fecha (sin referencia)
-  matchPass(remainingA, remainingB, matched, {
-    amountExact: true,
-    dateExact: true,
+  // Pasada 2: Monto exacto (confianza 90%)
+  // Si hay varios con el mismo monto, usa fecha para desempatar
+  matchByAmount(remainingA, remainingB, matched, {
+    amountTolerance: 0,
     referenceRequired: false,
     method: 'amount_date',
     confidence: 0.9,
+    negateB,
   });
 
-  // Pasada 3: Monto + Referencia (fecha cercana)
-  matchPass(remainingA, remainingB, matched, {
-    amountExact: true,
-    dateExact: false,
-    dateTolerance: config.dateTolerance,
-    referenceRequired: true,
-    method: 'amount_reference',
-    confidence: 0.85,
-  });
-
-  // Pasada 4: Monto exacto + fecha cercana
-  matchPass(remainingA, remainingB, matched, {
-    amountExact: true,
-    dateExact: false,
-    dateTolerance: config.dateTolerance,
-    referenceRequired: false,
-    method: 'amount_fuzzy',
-    confidence: 0.7,
-  });
-
-  // Pasada 5: Fuzzy
-  matchPass(remainingA, remainingB, matched, {
-    amountExact: false,
-    amountTolerance: config.amountTolerance,
-    dateExact: false,
-    dateTolerance: config.dateTolerance + 2,
-    referenceRequired: false,
-    descriptionSimilarity: 0.6,
-    method: 'fuzzy',
-    confidence: 0.5,
-  });
+  // Pasada 3: Monto con tolerancia pequeña (confianza 70%)
+  // Para cubrir diferencias de centavos
+  if (config.amountTolerance > 0) {
+    matchByAmount(remainingA, remainingB, matched, {
+      amountTolerance: config.amountTolerance,
+      referenceRequired: false,
+      method: 'amount_fuzzy',
+      confidence: 0.7,
+      negateB,
+    });
+  }
 
   return buildResult(matched, remainingA, remainingB, reconciliationType);
 }
 
-function matchPass(
+interface AmountMatchConfig {
+  amountTolerance: number;
+  referenceRequired: boolean;
+  method: MatchMethod;
+  confidence: number;
+  negateB: boolean; // true = comparar txA.amount con -txB.amount (conciliación bancaria)
+}
+
+function matchByAmount(
   remainingA: Transaction[],
   remainingB: Transaction[],
   matched: MatchedPair[],
-  config: MatchConfig
+  config: AmountMatchConfig
 ): void {
   const aToRemove: number[] = [];
   const bToRemove: number[] = [];
@@ -109,9 +93,24 @@ function matchPass(
 
       const txB = remainingB[bi];
 
-      if (!isMatch(txA, txB, config)) continue;
+      // Para conciliación bancaria, comparar con signo invertido
+      // Extracto +1000 debe cruzar con Libro -1000 (débito)
+      const comparableAmountB = config.negateB ? -txB.amount : txB.amount;
 
-      const score = calculateMatchScore(txA, txB);
+      // Criterio principal: el monto debe coincidir
+      if (config.amountTolerance === 0) {
+        if (txA.amount !== comparableAmountB) continue;
+      } else {
+        if (!amountsMatch(txA.amount, comparableAmountB, config.amountTolerance)) continue;
+      }
+
+      // Si se requiere referencia, verificar
+      if (config.referenceRequired) {
+        if (!referencesMatch(txA.reference, txB.reference)) continue;
+      }
+
+      // Calcular score de desempate (referencia + fecha)
+      const score = calculateTiebreakScore(txA, txB);
       if (!bestMatch || score > bestMatch.score) {
         bestMatch = { index: bi, score };
       }
@@ -119,13 +118,14 @@ function matchPass(
 
     if (bestMatch !== null) {
       const txB = remainingB[bestMatch.index];
+      const comparableB = config.negateB ? -txB.amount : txB.amount;
 
       matched.push({
         sourceATransaction: txA,
         sourceBTransaction: txB,
         confidence: config.confidence,
         matchMethod: config.method,
-        amountDifference: amountDifference(txA.amount, txB.amount),
+        amountDifference: amountDifference(txA.amount, comparableB),
         dateDifferenceInDays: dateDifferenceInDays(txA.date, txB.date),
       });
 
@@ -142,51 +142,22 @@ function matchPass(
     .forEach((i) => remainingB.splice(i, 1));
 }
 
-function isMatch(
-  txA: Transaction,
-  txB: Transaction,
-  config: MatchConfig
-): boolean {
-  if (config.amountExact) {
-    if (txA.amount !== txB.amount) return false;
-  } else if (config.amountTolerance !== undefined) {
-    if (!amountsMatch(txA.amount, txB.amount, config.amountTolerance)) {
-      return false;
-    }
-  }
-
-  if (config.dateExact) {
-    if (!datesMatch(txA.date, txB.date)) return false;
-  } else if (config.dateTolerance !== undefined) {
-    if (!datesWithinTolerance(txA.date, txB.date, config.dateTolerance)) {
-      return false;
-    }
-  }
-
-  if (config.referenceRequired) {
-    if (!referencesMatch(txA.reference, txB.reference)) return false;
-  }
-
-  if (config.descriptionSimilarity !== undefined) {
-    const similarity = stringSimilarity(txA.description, txB.description);
-    if (similarity < config.descriptionSimilarity) return false;
-  }
-
-  return true;
-}
-
-function calculateMatchScore(txA: Transaction, txB: Transaction): number {
+/**
+ * Score de desempate cuando hay varios candidatos con el mismo monto.
+ * Prioriza: referencia > fecha cercana.
+ */
+function calculateTiebreakScore(txA: Transaction, txB: Transaction): number {
   let score = 0;
 
-  if (txA.amount === txB.amount) score += 3;
-  else score += 1;
+  // Referencia coincide: +3
+  if (referencesMatch(txA.reference, txB.reference)) score += 3;
 
-  if (txA.date === txB.date) score += 2;
-  else score += 1;
-
-  if (referencesMatch(txA.reference, txB.reference)) score += 2;
-
-  score += stringSimilarity(txA.description, txB.description);
+  // Fecha: entre más cercana, mejor (máx +2)
+  const daysDiff = Math.abs(dateDifferenceInDays(txA.date, txB.date));
+  if (daysDiff === 0) score += 2;
+  else if (daysDiff <= 3) score += 1.5;
+  else if (daysDiff <= 7) score += 1;
+  else if (daysDiff <= 30) score += 0.5;
 
   return score;
 }
