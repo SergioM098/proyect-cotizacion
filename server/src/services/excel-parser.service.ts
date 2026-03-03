@@ -21,13 +21,24 @@ export async function parseExcelFile(filePath: string): Promise<ParsedSheet> {
 
   const allRows: string[][] = [];
 
-  worksheet.eachRow((row) => {
+  // Usar dimensions para cubrir TODO el rango, incluyendo filas que eachRow puede omitir
+  const dims = worksheet.dimensions;
+  const lastRowNum = Math.max(
+    dims?.bottom ?? 0,
+    worksheet.lastRow?.number ?? 0,
+    worksheet.rowCount
+  );
+  console.log(`[EXCEL PARSE] dims=${dims?.top}:${dims?.bottom}, lastRow=${worksheet.lastRow?.number}, rowCount=${worksheet.rowCount} → iterando hasta ${lastRowNum}`);
+
+  for (let rowNum = 1; rowNum <= lastRowNum; rowNum++) {
+    const row = worksheet.getRow(rowNum);
     const values = row.values as (string | number | Date | null)[];
-    // ExcelJS usa índice 1 y devuelve arrays dispersos (sparse arrays)
-    // Usar Array.from para crear un array denso sin huecos undefined
     const cells = Array.from({ length: maxCols }, (_, i) => formatCellValue(values[i + 1]));
-    allRows.push(cells);
-  });
+    // Solo agregar filas que tienen al menos una celda con contenido
+    if (cells.some(c => c.trim() !== '')) {
+      allRows.push(cells);
+    }
+  }
 
   if (allRows.length === 0) {
     return { headers: [], rows: [], totalRows: 0 };
@@ -49,18 +60,103 @@ export async function parseExcelFile(filePath: string): Promise<ParsedSheet> {
     rows = allRows;
   }
 
-  // Filtrar filas vacías o que son sub-encabezados de cuentas (muy pocas celdas llenas)
-  const minFilledCells = Math.max(3, Math.floor(headers.filter(h => h.trim()).length * 0.3));
-  rows = rows.filter(row => {
-    const filledCells = row.filter(c => c.trim() !== '').length;
-    return filledCells >= minFilledCells;
+  // Filtrar filas que no son datos reales de transacciones.
+  const headerFingerprint = headers.map(h => h.toLowerCase().trim()).join('|');
+  const beforeCount = rows.length;
+
+  rows = rows.filter((row, idx) => {
+    // 1. Descartar filas de encabezados de columna repetidos (exports multi-página)
+    const rowFingerprint = row.map(c => c.toLowerCase().trim()).join('|');
+    if (rowFingerprint === headerFingerprint) {
+      console.log(`[FILTER] Fila ${idx}: REPETIDA HEADER → descartada`);
+      return false;
+    }
+
+    // 2. Descartar filas con metadatos de página (empresa, NIT, periodo, etc.)
+    if (isPageMetadata(row)) {
+      console.log(`[FILTER] Fila ${idx}: METADATA → descartada |`, row.filter(c => c.trim()).join(' | '));
+      return false;
+    }
+
+    // 3. Debe tener fecha + monto numérico para ser transacción válida
+    if (!looksLikeDataRow(row)) {
+      console.log(`[FILTER] Fila ${idx}: SIN fecha+monto → descartada |`, row.filter(c => c.trim()).join(' | '));
+      return false;
+    }
+
+    return true;
   });
+
+  console.log(`[FILTER] ${beforeCount} filas → ${rows.length} filas después de filtrar`);
 
   return {
     headers,
     rows,
     totalRows: rows.length,
   };
+}
+
+/**
+ * Detecta filas de metadatos/encabezado de página que se repiten en exports multi-página.
+ * Ej: nombre empresa, NIT, periodo, "Impreso Por:", "Pag: 2", "Desde:", etc.
+ */
+const PAGE_METADATA_PATTERNS = [
+  /\bnit\.?\s*:?\s*\d/i,
+  /\bimpreso\s+por\b/i,
+  /\bpag(ina|ína)?[\s.:]+\d/i,
+  /\bdesde\s*:/i,
+  /\bhasta\s*:/i,
+  /\bperiodo\s+de\b/i,
+  /\bextractos?\s+de\s+libros/i,
+  /\bextractos?\s+bancari/i,
+  /\bsaldo\s+anterior\b/i,
+  /\bfabrica\s+de\b/i,
+  /\bs\.?a\.?s\.?\b/i,
+  /\bmoneda\s+nacional\b/i,
+  /\bcta\s+corriente\b/i,
+  /\btotal\s+cuenta\b/i,
+];
+
+function isPageMetadata(row: string[]): boolean {
+  const joined = row.join(' ');
+  return PAGE_METADATA_PATTERNS.some(pattern => pattern.test(joined));
+}
+
+/**
+ * Verifica que una fila tenga al menos una fecha y un valor numérico (monto).
+ * Esto filtra automáticamente filas que no son transacciones.
+ */
+function looksLikeDataRow(row: string[]): boolean {
+  let hasDate = false;
+  let hasAmount = false;
+
+  for (const cell of row) {
+    const trimmed = cell.trim();
+    if (!trimmed) continue;
+
+    // Fecha: DD/MM/YYYY, YYYY-MM-DD, YYYY/MM/DD
+    if (!hasDate) {
+      if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(trimmed) ||
+          /^\d{4}[\/-]\d{1,2}[\/-]\d{1,2}$/.test(trimmed)) {
+        hasDate = true;
+      }
+    }
+
+    // Monto numérico: acepta formatos como 1.234.567,89 o 1,234,567.89 o 1234567
+    if (!hasAmount) {
+      if (/^-?[\d.,]+$/.test(trimmed)) {
+        // Debe tener al menos 2 dígitos para no confundir con códigos cortos
+        const digitCount = (trimmed.match(/\d/g) || []).length;
+        if (digitCount >= 2) {
+          hasAmount = true;
+        }
+      }
+    }
+
+    if (hasDate && hasAmount) return true;
+  }
+
+  return false;
 }
 
 /**

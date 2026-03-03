@@ -171,6 +171,7 @@ const BANK_CHARGE_KEYWORDS = [
   'cobro iva', 'iva pagos automaticos', 'iva pagos automáticos',
   'servicio pago a proveedores', 'servicio pagos a proveedores',
   'servicio pagos a terceros', 'servicio pago a terceros',
+  'servicio pago a otros bancos', 'servicio pagos a otros bancos',
   'servicio por pagos a nequi', 'servicio pagos a nequi',
   'cuota plan canal negocios', 'iva cuota plan canal',
 ];

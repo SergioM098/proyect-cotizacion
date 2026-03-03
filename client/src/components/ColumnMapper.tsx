@@ -171,7 +171,7 @@ function MappingSection({
       )}
 
       {/* Tabla de preview con columnas resaltadas */}
-      <div className="overflow-auto max-h-[400px] rounded-lg border border-gray-200">
+      <div className="overflow-auto max-h-[600px] rounded-lg border border-gray-200">
         <table className="text-sm w-full">
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-50">

@@ -164,7 +164,7 @@ export function autoDetectColumns(headers: string[]): Partial<ColumnMapping> {
   if (descIdx !== -1) mapping.description = descIdx;
 
   // Referencia
-  const refKeywords = ['referencia', 'ref', 'reference', 'num', 'número', 'numero', 'documento', 'doc'];
+  const refKeywords = ['referencia', 'ref', 'reference', 'num', 'número', 'numero', 'td', 'documento', 'doc'];
   const refIdx = lower.findIndex((h) =>
     refKeywords.some((k) => h.includes(k))
   );

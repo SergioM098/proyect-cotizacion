@@ -122,6 +122,14 @@ def extract_tables(pdf_path: str) -> dict:
         first_col_words = [w for w in words_in_row if w["x0"] < first_col_limit]
         is_new_row = len(first_col_words) > 0
 
+        # Filas de resumen/totales que no empiezan en la primera columna
+        # deben tratarse como filas nuevas para no fusionarse con la anterior
+        if not is_new_row:
+            row_text = " ".join(w["text"] for w in words_in_row).lower()
+            if any(kw in row_text for kw in ["total", "subtotal", "saldo anterior",
+                                              "saldo final", "saldo inicial"]):
+                is_new_row = True
+
         if is_new_row and any(c.strip() for c in current_cells):
             # Guardar fila anterior
             transactions.append([c.strip() for c in current_cells])

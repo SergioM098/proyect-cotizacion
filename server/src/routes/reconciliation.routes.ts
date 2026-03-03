@@ -113,7 +113,11 @@ reconciliationRouter.get('/export/:id', async (req, res, next) => {
     if (result.reconciliationType === 'bank') {
       // Categorizar transacciones del extracto bancario (sourceA)
       const consignacionesExtracto = result.sourceAOnly.filter(t => t.amount >= 0);
-      const pagosExtracto = result.sourceAOnly.filter(t => t.amount < 0);
+      // Pagos en extracto incluye gastos bancarios (comisiones, GMF, etc.)
+      const pagosExtracto = [
+        ...result.sourceAOnly.filter(t => t.amount < 0),
+        ...result.bankCharges,
+      ];
 
       // Categorizar transacciones del libro contable (sourceB)
       const pagosLibros = result.sourceBOnly.filter(t => t.amount < 0);
@@ -125,7 +129,7 @@ reconciliationRouter.get('/export/:id', async (req, res, next) => {
         consignacionesExtracto, true);
       row++;
 
-      // Sección 2: (-) Pagos en extractos y no en libros
+      // Sección 2: (-) Pagos en extractos y no en libros (incluye gastos bancarios)
       row = writeTransactionSection(sheet, row,
         '(-) PAGOS EN EXTRACTOS Y NO EN LIBROS',
         pagosExtracto, true);
@@ -142,14 +146,6 @@ reconciliationRouter.get('/export/:id', async (req, res, next) => {
         '(-) CONSIGNACIONES EN LIBROS Y NO EN EXTRACTO',
         consignacionesLibros, true);
       row++;
-
-      // Sección 5: Gastos Bancarios
-      if (result.bankCharges.length > 0) {
-        row = writeTransactionSection(sheet, row,
-          'GASTOS BANCARIOS',
-          result.bankCharges, true);
-        row++;
-      }
     } else {
       // Conciliación entre cuentas: 2 secciones
       row = writeTransactionSection(sheet, row,
