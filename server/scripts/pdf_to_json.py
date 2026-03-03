@@ -5,7 +5,25 @@ Salida: JSON con { headers: string[], rows: string[][] }
 """
 import sys
 import json
+import re
 import pdfplumber
+
+
+# Patrones de texto de pie de página / encabezados repetidos que deben ignorarse
+PAGE_FOOTER_PATTERNS = [
+    re.compile(r"^p[aá]gina\s*\d+\s*de\s*\d+$", re.IGNORECASE),
+    re.compile(r"^\d+\s*de\s*\d+$"),  # "1 de 2"
+    re.compile(r"^p[aá]g\.?\s*\d+", re.IGNORECASE),  # "Pág 1", "Pag. 2"
+]
+
+
+def is_footer_row(words: list[dict]) -> bool:
+    """Determina si un grupo de palabras es un pie de página (ej: 'Página 1 de 2')."""
+    text = " ".join(w["text"] for w in words).strip()
+    for pattern in PAGE_FOOTER_PATTERNS:
+        if pattern.search(text):
+            return True
+    return False
 
 
 def extract_tables(pdf_path: str) -> dict:
@@ -13,9 +31,31 @@ def extract_tables(pdf_path: str) -> dict:
         all_words = []
         for page in pdf.pages:
             words = page.extract_words(keep_blank_chars=True, y_tolerance=3)
-            # Agregar offset de página para que Y sea único
             page_offset = page.page_number * 10000
+
+            # Agrupar palabras de esta página por Y para detectar pies de página
+            page_row_groups = group_by_y(
+                [{"text": w["text"], "x0": w["x0"], "x1": w["x1"], "top": w["top"]}
+                 for w in words],
+                tolerance=5
+            )
+
+            # Identificar Y positions que son pies de página
+            footer_ys = set()
+            for y, row_words in page_row_groups.items():
+                if is_footer_row(row_words):
+                    footer_ys.add(y)
+
             for w in words:
+                # Saltar palabras que pertenecen a filas de pie de página
+                skip = False
+                for fy in footer_ys:
+                    if abs(w["top"] - fy) <= 5:
+                        skip = True
+                        break
+                if skip:
+                    continue
+
                 all_words.append({
                     "text": w["text"],
                     "x0": w["x0"],
@@ -101,15 +141,33 @@ def extract_tables(pdf_path: str) -> dict:
     if any(c.strip() for c in current_cells):
         transactions.append([c.strip() for c in current_cells])
 
-    # Filtrar filas de "Página X de Y" y filas vacías
+    # Palabras clave que indican filas de resumen/totales (no son transacciones)
+    summary_keywords = [
+        "total", "subtotal", "sub-total", "saldo anterior", "saldo final",
+        "saldo inicial", "total movimiento", "total general", "gran total",
+        "totales", "saldo disponible", "saldo a la fecha",
+    ]
+
+    # Filtrar filas no deseadas y limpiar residuos
     filtered = []
     for row in transactions:
         combined = " ".join(row).lower()
-        if "página" in combined and " de " in combined and len(combined) < 30:
+        # Descartar filas completas de paginación
+        if "página" in combined and " de " in combined and len(combined) < 50:
+            continue
+        if re.search(r"p[aá]gina\s*\d+\s*de\s*\d+", combined):
+            continue
+        # Descartar filas de totales/resumen
+        if any(kw in combined for kw in summary_keywords):
             continue
         if all(c == "" for c in row):
             continue
-        filtered.append(row)
+        # Limpiar celdas individuales que tengan "Página X de Y" pegado al valor
+        cleaned_row = []
+        for cell in row:
+            cell = re.sub(r"\s*[Pp][aá]gina\s*\d+\s*de\s*\d+\s*", "", cell).strip()
+            cleaned_row.append(cell)
+        filtered.append(cleaned_row)
 
     return {
         "headers": headers,

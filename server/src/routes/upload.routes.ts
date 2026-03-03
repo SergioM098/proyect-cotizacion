@@ -75,13 +75,13 @@ uploadRouter.post(
 
       const sourceAPreview: FilePreview = {
         headers: sourceAParsed.headers,
-        sampleRows: sourceAParsed.rows.slice(0, 5),
+        sampleRows: sourceAParsed.rows,
         totalRows: sourceAParsed.rows.length,
       };
 
       const sourceBPreview: FilePreview = {
         headers: sourceBParsed.headers,
-        sampleRows: sourceBParsed.rows.slice(0, 5),
+        sampleRows: sourceBParsed.rows,
         totalRows: sourceBParsed.rows.length,
       };
 
