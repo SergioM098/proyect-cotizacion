@@ -7,11 +7,10 @@ interface SummaryCardProps {
 }
 
 export function SummaryCards({ summary, labels, reconciliationType }: SummaryCardProps) {
-  const rate = Math.round(summary.reconciliationRate * 100);
   const showBankCharges = reconciliationType === 'bank' && summary.bankChargesCount > 0;
 
   return (
-    <div className={`grid grid-cols-2 ${showBankCharges ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-4 mb-6`}>
+    <div className={`grid grid-cols-2 ${showBankCharges ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4 mb-6`}>
       <Card
         label="Conciliadas"
         value={String(summary.matchedCount)}
@@ -38,12 +37,6 @@ export function SummaryCards({ summary, labels, reconciliationType }: SummaryCar
           color="blue"
         />
       )}
-      <Card
-        label="Tasa de Conciliaci\u00f3n"
-        value={`${rate}%`}
-        detail={`${summary.discrepancyCount} discrepancias`}
-        color={rate >= 80 ? 'green' : rate >= 50 ? 'yellow' : 'red'}
-      />
     </div>
   );
 }
@@ -60,21 +53,21 @@ function Card({
   color: 'green' | 'yellow' | 'red' | 'blue';
 }) {
   const colorMap = {
-    green: 'border-green-200 bg-green-50',
-    yellow: 'border-yellow-200 bg-yellow-50',
-    red: 'border-red-200 bg-red-50',
-    blue: 'border-blue-200 bg-blue-50',
+    green: 'border-green-800/40 bg-green-950/20',
+    yellow: 'border-yellow-800/40 bg-yellow-950/20',
+    red: 'border-red-800/40 bg-red-950/20',
+    blue: 'border-blue-800/40 bg-blue-950/20',
   };
   const valueColorMap = {
-    green: 'text-green-700',
-    yellow: 'text-yellow-700',
-    red: 'text-red-700',
-    blue: 'text-blue-700',
+    green: 'text-green-400',
+    yellow: 'text-yellow-400',
+    red: 'text-red-400',
+    blue: 'text-blue-400',
   };
 
   return (
     <div className={`rounded-xl border p-4 ${colorMap[color]}`}>
-      <p className="text-sm text-gray-600">{label}</p>
+      <p className="text-sm text-gray-400">{label}</p>
       <p className={`text-2xl font-bold ${valueColorMap[color]}`}>{value}</p>
       <p className="text-xs text-gray-500 mt-1">{detail}</p>
     </div>

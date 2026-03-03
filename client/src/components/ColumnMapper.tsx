@@ -22,12 +22,12 @@ const FIELD_LABELS: Record<MappingField, string> = {
 };
 
 const FIELD_COLORS: Record<MappingField, string> = {
-  date: 'bg-blue-100 text-blue-700 border-blue-200',
-  description: 'bg-purple-100 text-purple-700 border-purple-200',
-  reference: 'bg-gray-100 text-gray-700 border-gray-200',
-  amount: 'bg-green-100 text-green-700 border-green-200',
-  debit: 'bg-red-100 text-red-700 border-red-200',
-  credit: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  date: 'bg-blue-900/40 text-blue-400 border-blue-800/50',
+  description: 'bg-purple-900/40 text-purple-400 border-purple-800/50',
+  reference: 'bg-gray-800 text-gray-400 border-gray-700',
+  amount: 'bg-green-900/40 text-green-400 border-green-800/50',
+  debit: 'bg-red-900/40 text-red-400 border-red-800/50',
+  credit: 'bg-emerald-900/40 text-emerald-400 border-emerald-800/50',
 };
 
 export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: ColumnMapperProps) {
@@ -85,7 +85,7 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
       />
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-950/30 border border-red-800/50 text-red-400 px-4 py-3 rounded-lg">
           {error}
         </div>
       )}
@@ -94,7 +94,7 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
         <button
           onClick={handleReconcile}
           disabled={loading || hasErrors}
-          className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Conciliando...' : 'Ejecutar conciliación'}
         </button>
@@ -134,15 +134,15 @@ function MappingSection({
     }));
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border p-6">
+    <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
       <div className="mb-4">
-        <h3 className="font-semibold text-gray-800 text-lg">{title}</h3>
-        <p className="text-sm text-gray-500">{subtitle}</p>
+        <h3 className="font-semibold text-gray-100 text-lg">{title}</h3>
+        <p className="text-sm text-gray-400">{subtitle}</p>
       </div>
 
       {/* Campos detectados como badges */}
       <div className="mb-4">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 select-none">
           Columnas detectadas
         </p>
         <div className="flex flex-wrap gap-2">
@@ -160,7 +160,7 @@ function MappingSection({
       </div>
 
       {errors.length > 0 && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="mb-4 bg-red-950/30 border border-red-800/50 text-red-400 px-4 py-3 rounded-lg text-sm">
           <p className="font-medium mb-1">No se pudieron detectar columnas requeridas:</p>
           <ul className="list-disc list-inside">
             {errors.map((err, i) => (
@@ -171,19 +171,19 @@ function MappingSection({
       )}
 
       {/* Tabla de preview con columnas resaltadas */}
-      <div className="overflow-auto max-h-[600px] rounded-lg border border-gray-200">
+      <div className="overflow-auto max-h-[600px] rounded-lg border border-gray-800">
         <table className="text-sm w-full">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-gray-50">
+            <tr className="bg-gray-800/60">
               {headers.map((h, i) => {
                 const mappedField = columnToField.get(i);
                 return (
                   <th
                     key={i}
-                    className={`px-3 py-2 text-left font-medium border-b ${
+                    className={`px-3 py-2 text-left font-medium border-b border-gray-700 ${
                       mappedField
                         ? FIELD_COLORS[mappedField]
-                        : 'text-gray-400'
+                        : 'text-gray-500'
                     }`}
                   >
                     {h}
@@ -199,14 +199,14 @@ function MappingSection({
           </thead>
           <tbody>
             {sampleRows.map((row, ri) => (
-              <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+              <tr key={ri} className={ri % 2 === 0 ? 'bg-gray-900' : 'bg-gray-800/30'}>
                 {row.map((cell, ci) => {
                   const mappedField = columnToField.get(ci);
                   return (
                     <td
                       key={ci}
                       className={`px-3 py-1.5 truncate max-w-[200px] ${
-                        mappedField ? 'text-gray-800 font-medium' : 'text-gray-400'
+                        mappedField ? 'text-gray-200 font-medium' : 'text-gray-500'
                       }`}
                     >
                       {cell}

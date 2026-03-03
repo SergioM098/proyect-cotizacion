@@ -94,6 +94,11 @@ export async function readExcelFull(filePath: string): Promise<ParsedExcelResult
   }
 
   console.log(`[EXCEL READER] Header en índice ${headerIdx}, ${rows.length} filas de datos`);
+  console.log(`[EXCEL READER] Headers: ${headers.join(' | ')}`);
+  // Mostrar las primeras 10 filas para debug
+  rows.slice(0, 10).forEach((row, i) => {
+    console.log(`[EXCEL READER] Fila ${i}: ${row.filter(c => c.trim()).join(' | ')}`);
+  });
   return { headers, rows };
 }
 

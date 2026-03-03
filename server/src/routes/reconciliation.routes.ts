@@ -171,7 +171,6 @@ reconciliationRouter.get('/export/:id', async (req, res, next) => {
       row = writeSummaryLine(sheet, row, 'Gastos Bancarios', result.summary.bankChargesCount);
       row = writeSummaryLine(sheet, row, 'Total Gastos Bancarios', `$${result.summary.bankChargesAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`);
     }
-    row = writeSummaryLine(sheet, row, 'Tasa de conciliación', `${(result.summary.reconciliationRate * 100).toFixed(1)}%`);
     row = writeSummaryLine(sheet, row, 'Discrepancias', result.summary.discrepancyCount);
 
     // ========== HOJA 2: Transacciones Conciliadas ==========

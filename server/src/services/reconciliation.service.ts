@@ -182,6 +182,12 @@ const BANK_CHARGE_KEYWORDS = [
   'com.mes b.virtual', 'com mes b virtual', 'com mes b.virtual',
   'com.iva mes b.vir', 'com iva mes b', 'com.iva mes',
   'cta. servicio', 'cta servicio',
+  // Banco de Occidente / Otros
+  'abono intereses ahorros', 'abono intereses',
+  'db automati cuota tarjcre', 'db automati cuota tarjeta',
+  'pago int ctes sobregiro', 'pago intereses sobregiro',
+  'iva sobre comisiones',
+  'comision transferencias', 'comisión transferencias',
 ];
 
 function isBankCharge(t: Transaction): boolean {
@@ -217,9 +223,6 @@ function buildResult(
     sourceBOnlyAmount: sourceBOnly.reduce((sum, t) => sum + Math.abs(t.amount), 0),
     bankChargesCount: bankCharges.length,
     bankChargesAmount: bankCharges.reduce((sum, t) => sum + Math.abs(t.amount), 0),
-    reconciliationRate:
-      matched.length /
-      Math.max(totalA, totalB, 1),
     discrepancyCount: matched.filter((m) => m.amountDifference > 0).length,
   };
 

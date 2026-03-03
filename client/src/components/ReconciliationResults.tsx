@@ -31,7 +31,7 @@ export function ReconciliationResults({ results }: ReconciliationResultsProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-800">
+        <h2 className="text-xl font-semibold text-gray-100">
           Resultados de {labels.title}
         </h2>
         <ExportButton resultId={results.id} />
@@ -43,8 +43,8 @@ export function ReconciliationResults({ results }: ReconciliationResultsProps) {
         reconciliationType={results.reconciliationType}
       />
 
-      <div className="bg-white rounded-xl shadow-sm border">
-        <div className="border-b">
+      <div className="bg-gray-900 rounded-xl border border-gray-800">
+        <div className="border-b border-gray-800">
           <nav className="flex">
             {tabs.map((tab) => (
               <button
@@ -52,12 +52,12 @@ export function ReconciliationResults({ results }: ReconciliationResultsProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-blue-400 text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-300'
                 }`}
               >
                 {tab.label}
-                <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-800 text-gray-400">
                   {tab.count}
                 </span>
               </button>

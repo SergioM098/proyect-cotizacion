@@ -38,17 +38,17 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-gray-950">
+      <header className="bg-gray-900 border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-100">
               {step === 'select' ? 'Conciliaciones' : labels.title}
             </h1>
             {step !== 'select' && (
               <button
                 onClick={handleReset}
-                className="text-sm text-blue-600 hover:text-blue-800"
+                className="text-sm text-blue-400 hover:text-blue-300"
               >
                 Nueva conciliaci&oacute;n
               </button>
@@ -62,14 +62,14 @@ export default function App() {
                 active={step === 'upload'}
                 completed={step === 'mapping' || step === 'results'}
               />
-              <div className="h-px w-8 bg-gray-300" />
+              <div className="h-px w-8 bg-gray-700" />
               <StepIndicator
                 number={2}
                 label="Mapear columnas"
                 active={step === 'mapping'}
                 completed={step === 'results'}
               />
-              <div className="h-px w-8 bg-gray-300" />
+              <div className="h-px w-8 bg-gray-700" />
               <StepIndicator
                 number={3}
                 label="Resultados"
@@ -109,19 +109,19 @@ export default function App() {
 function TypeSelector({ onSelect }: { onSelect: (type: ReconciliationType) => void }) {
   return (
     <div className="max-w-2xl mx-auto">
-      <p className="text-center text-gray-600 mb-8">
+      <p className="text-center text-gray-400 mb-8">
         Selecciona el tipo de conciliaci&oacute;n que deseas realizar
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <button
           onClick={() => onSelect('bank')}
-          className="bg-white rounded-xl shadow-sm border-2 border-transparent hover:border-blue-400 p-8 text-left transition-all hover:shadow-md"
+          className="bg-gray-900 rounded-xl border border-gray-800 hover:border-blue-500/50 p-8 text-left transition-all"
         >
           <div className="text-4xl mb-4">🏦</div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+          <h3 className="text-lg font-semibold text-gray-100 mb-2">
             Conciliaci&oacute;n Bancaria
           </h3>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-400">
             Compara el extracto del banco con tu libro contable para identificar
             diferencias y transacciones faltantes.
           </p>
@@ -129,13 +129,13 @@ function TypeSelector({ onSelect }: { onSelect: (type: ReconciliationType) => vo
 
         <button
           onClick={() => onSelect('accounts')}
-          className="bg-white rounded-xl shadow-sm border-2 border-transparent hover:border-blue-400 p-8 text-left transition-all hover:shadow-md"
+          className="bg-gray-900 rounded-xl border border-gray-800 hover:border-blue-500/50 p-8 text-left transition-all"
         >
           <div className="text-4xl mb-4">📊</div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+          <h3 className="text-lg font-semibold text-gray-100 mb-2">
             Conciliaci&oacute;n entre Cuentas
           </h3>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-400">
             Compara dos cuentas contables entre s&iacute; para verificar que los
             movimientos cuadren correctamente.
           </p>
@@ -157,10 +157,10 @@ function StepIndicator({
   completed: boolean;
 }) {
   const bgClass = active
-    ? 'bg-blue-600 text-white'
+    ? 'bg-blue-500 text-white'
     : completed
       ? 'bg-green-500 text-white'
-      : 'bg-gray-200 text-gray-500';
+      : 'bg-gray-800 text-gray-500';
 
   return (
     <div className="flex items-center gap-2">
@@ -169,7 +169,7 @@ function StepIndicator({
       >
         {completed ? '\u2713' : number}
       </span>
-      <span className={active ? 'font-medium text-gray-900' : 'text-gray-500'}>
+      <span className={active ? 'font-medium text-gray-100' : 'text-gray-500'}>
         {label}
       </span>
     </div>

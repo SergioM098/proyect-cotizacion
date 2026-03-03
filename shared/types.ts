@@ -75,7 +75,6 @@ export interface ReconciliationSummary {
   sourceBOnlyAmount: number;
   bankChargesCount: number;
   bankChargesAmount: number;
-  reconciliationRate: number;
   discrepancyCount: number;
 }
 

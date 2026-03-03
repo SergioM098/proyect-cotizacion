@@ -52,7 +52,7 @@ export function FileUpload({ reconciliationType, onComplete }: FileUploadProps) 
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-950/30 border border-red-800/50 text-red-400 px-4 py-3 rounded-lg">
           {error}
         </div>
       )}
@@ -61,7 +61,7 @@ export function FileUpload({ reconciliationType, onComplete }: FileUploadProps) 
         <button
           onClick={handleSubmit}
           disabled={!sourceAFile || !sourceBFile || loading}
-          className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Procesando archivos...' : 'Subir y continuar'}
         </button>
@@ -108,12 +108,12 @@ function DropZone({
       }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
-      className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
+      className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer bg-gray-900/50 ${
         dragOver
-          ? 'border-blue-400 bg-blue-50'
+          ? 'border-blue-500 bg-blue-950/30'
           : file
-            ? 'border-green-300 bg-green-50'
-            : 'border-gray-300 hover:border-gray-400'
+            ? 'border-green-500/50 bg-green-950/20'
+            : 'border-gray-700 hover:border-gray-600'
       }`}
     >
       <label className="cursor-pointer block">
@@ -125,15 +125,15 @@ function DropZone({
         />
         <div className="space-y-2">
           <div className="text-4xl">{file ? '\u2705' : '\uD83D\uDCC4'}</div>
-          <p className="font-semibold text-gray-700">{label}</p>
+          <p className="font-semibold text-gray-200">{label}</p>
           {file ? (
-            <p className="text-sm text-green-600">
+            <p className="text-sm text-green-400">
               {file.name} ({(file.size / 1024).toFixed(1)} KB)
             </p>
           ) : (
             <>
-              <p className="text-sm text-gray-500">{description}</p>
-              <p className="text-xs text-gray-400">
+              <p className="text-sm text-gray-400">{description}</p>
+              <p className="text-xs text-gray-600">
                 Arrastra aqu&iacute; o haz clic para seleccionar
               </p>
             </>
