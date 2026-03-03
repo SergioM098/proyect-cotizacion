@@ -164,21 +164,29 @@ function calculateTiebreakScore(txA: Transaction, txB: Transaction): number {
 
 // Palabras clave para detectar gastos bancarios automáticamente
 const BANK_CHARGE_KEYWORDS = [
+  // Genéricos
   'gasto bancario', 'gastos bancarios',
   'comision', 'comisión',
   'gmf', '4x1000', '4 x 1000', 'gravamen',
   'cuota de manejo', 'cuota manejo',
+  'imp/trans financ', 'imp trans financ', // 4x1000 acumulado mes (Colpatria)
+  // Bancolombia
   'cobro iva', 'iva pagos automaticos', 'iva pagos automáticos',
   'servicio pago a proveedores', 'servicio pagos a proveedores',
   'servicio pagos a terceros', 'servicio pago a terceros',
   'servicio pago a otros bancos', 'servicio pagos a otros bancos',
   'servicio por pagos a nequi', 'servicio pagos a nequi',
   'cuota plan canal negocios', 'iva cuota plan canal',
+  'impto gobierno 4x1000',
+  // Colpatria / Scotiabank
+  'com.mes b.virtual', 'com mes b virtual', 'com mes b.virtual',
+  'com.iva mes b.vir', 'com iva mes b', 'com.iva mes',
+  'cta. servicio', 'cta servicio',
 ];
 
 function isBankCharge(t: Transaction): boolean {
-  const desc = t.description.toLowerCase();
-  return BANK_CHARGE_KEYWORDS.some(kw => desc.includes(kw));
+  const text = `${t.description} ${t.reference}`.toLowerCase();
+  return BANK_CHARGE_KEYWORDS.some(kw => text.includes(kw));
 }
 
 function buildResult(
