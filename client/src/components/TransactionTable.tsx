@@ -29,17 +29,16 @@ export function TransactionTable({
           Total: {formatMoney(totalAmount)}
         </p>
       </div>
-      <div className="overflow-auto rounded-lg border border-gray-800 max-h-[500px]">
-        <table className="w-full text-sm">
+      <div className="rounded-lg border border-gray-800 max-h-[75vh] overflow-y-auto">
+        <table className="w-full text-sm table-fixed">
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-800/60 border-b border-gray-700">
-              <th className="px-3 py-2.5 text-center font-semibold text-gray-400 w-14">Fila</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-400 w-28">Fecha</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-400">Descripción</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-400">Descripción Original</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-400 w-32">Referencia</th>
-              <th className="px-3 py-2.5 text-right font-semibold text-gray-400 w-36">Monto</th>
-              <th className="px-3 py-2.5 text-right font-semibold text-gray-400 w-36">Monto Original</th>
+              <th className="px-3 py-2.5 text-center font-semibold text-gray-400 w-[5%]">Fila</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-400 w-[10%]">Fecha</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-400 w-[40%]">Descripción</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-400 w-[15%]">Referencia</th>
+              <th className="px-3 py-2.5 text-right font-semibold text-gray-400 w-[15%]">Monto</th>
+              <th className="px-3 py-2.5 text-right font-semibold text-gray-400 w-[15%]">Monto Original</th>
             </tr>
           </thead>
           <tbody>
@@ -56,17 +55,10 @@ export function TransactionTable({
                 <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap font-medium">
                   {formatDate(tx.date)}
                 </td>
-                <td className="px-3 py-2.5 text-gray-300" title={tx.description}>
-                  <span className="block max-w-[300px] truncate">
-                    {tx.description}
-                  </span>
+                <td className="px-3 py-2.5 text-gray-300 truncate" title={tx.rawDescription || tx.description}>
+                  {tx.description}
                 </td>
-                <td className="px-3 py-2.5 text-gray-500 italic text-xs" title={tx.rawDescription}>
-                  <span className="block max-w-[300px] truncate">
-                    {tx.rawDescription !== tx.description ? tx.rawDescription : <span className="text-gray-600">—</span>}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5 text-gray-500 font-mono text-xs">
+                <td className="px-3 py-2.5 text-gray-500 font-mono text-xs truncate">
                   {tx.reference || <span className="text-gray-600">—</span>}
                 </td>
                 <td className={`px-3 py-2.5 text-right whitespace-nowrap font-mono font-semibold ${

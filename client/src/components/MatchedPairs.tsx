@@ -11,6 +11,7 @@ const METHOD_LABELS: Record<string, { label: string; color: string }> = {
   amount_reference: { label: 'Monto+Ref', color: 'bg-indigo-900/40 text-indigo-400' },
   amount_fuzzy: { label: 'Monto aprox.', color: 'bg-yellow-900/40 text-yellow-400' },
   fuzzy: { label: 'Aproximado', color: 'bg-orange-900/40 text-orange-400' },
+  many_to_one: { label: 'N:1', color: 'bg-cyan-900/40 text-cyan-400' },
 };
 
 export function MatchedPairs({ pairs, labels }: MatchedPairsProps) {
@@ -34,24 +35,24 @@ export function MatchedPairs({ pairs, labels }: MatchedPairsProps) {
           Total: {formatMoney(totalAmount)}
         </p>
       </div>
-      <div className="overflow-auto rounded-lg border border-gray-800 max-h-[500px]">
-        <table className="w-full text-sm">
+      <div className="rounded-lg border border-gray-800 max-h-[75vh] overflow-y-auto">
+        <table className="w-full text-sm table-fixed">
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-800/60">
               <th
-                className="px-2 py-2.5 text-left font-semibold text-blue-400 border-b-2 border-blue-800/60"
-                colSpan={7}
+                className="px-1.5 py-2 text-left text-xs font-semibold text-blue-400 border-b-2 border-blue-800/60"
+                colSpan={5}
               >
                 {labels.sourceA}
               </th>
               <th
-                className="px-2 py-2.5 text-left font-semibold text-purple-400 border-b-2 border-purple-800/60 border-l-2 border-l-gray-700"
-                colSpan={7}
+                className="px-1.5 py-2 text-left text-xs font-semibold text-purple-400 border-b-2 border-purple-800/60 border-l-2 border-l-gray-700"
+                colSpan={5}
               >
                 {labels.sourceB}
               </th>
               <th
-                className="px-2 py-2.5 text-center font-semibold text-gray-400 border-b-2 border-gray-700 border-l-2 border-l-gray-700"
+                className="px-1.5 py-2 text-center text-xs font-semibold text-gray-400 border-b-2 border-gray-700 border-l-2 border-l-gray-700"
                 colSpan={4}
               >
                 Resultado
@@ -59,26 +60,22 @@ export function MatchedPairs({ pairs, labels }: MatchedPairsProps) {
             </tr>
             <tr className="bg-gray-800/40 border-b border-gray-700">
               {/* Source A sub-headers */}
-              <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 w-10">Fila</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500">Fecha</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500">Descripción</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500">Desc. Original</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500">Ref.</th>
-              <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-500">Monto</th>
-              <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-500">Monto Orig.</th>
+              <th className="px-1.5 py-1 text-center text-[10px] font-medium text-gray-500 w-[3%]">#</th>
+              <th className="px-1.5 py-1 text-left text-[10px] font-medium text-gray-500 w-[6%]">Fecha</th>
+              <th className="px-1.5 py-1 text-left text-[10px] font-medium text-gray-500 w-[20%]">Descripción</th>
+              <th className="px-1.5 py-1 text-left text-[10px] font-medium text-gray-500 w-[5%]">Ref.</th>
+              <th className="px-1.5 py-1 text-right text-[10px] font-medium text-gray-500 w-[9%]">Monto</th>
               {/* Source B sub-headers */}
-              <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 border-l-2 border-l-gray-700 w-10">Fila</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500">Fecha</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500">Descripción</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500">Desc. Original</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-500">Ref.</th>
-              <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-500">Monto</th>
-              <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-500">Monto Orig.</th>
+              <th className="px-1.5 py-1 text-center text-[10px] font-medium text-gray-500 border-l-2 border-l-gray-700 w-[3%]">#</th>
+              <th className="px-1.5 py-1 text-left text-[10px] font-medium text-gray-500 w-[6%]">Fecha</th>
+              <th className="px-1.5 py-1 text-left text-[10px] font-medium text-gray-500 w-[20%]">Descripción</th>
+              <th className="px-1.5 py-1 text-left text-[10px] font-medium text-gray-500 w-[5%]">Ref.</th>
+              <th className="px-1.5 py-1 text-right text-[10px] font-medium text-gray-500 w-[9%]">Monto</th>
               {/* Result sub-headers */}
-              <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500 border-l-2 border-l-gray-700">Confianza</th>
-              <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500">Método</th>
-              <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-500">Dif. Monto</th>
-              <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-500">Dif. Días</th>
+              <th className="px-1.5 py-1 text-center text-[10px] font-medium text-gray-500 border-l-2 border-l-gray-700 w-[4%]">Conf.</th>
+              <th className="px-1.5 py-1 text-center text-[10px] font-medium text-gray-500 w-[5%]">Método</th>
+              <th className="px-1.5 py-1 text-right text-[10px] font-medium text-gray-500 w-[3%]">Dif.$</th>
+              <th className="px-1.5 py-1 text-center text-[10px] font-medium text-gray-500 w-[2%]">Días</th>
             </tr>
           </thead>
           <tbody>
@@ -87,85 +84,90 @@ export function MatchedPairs({ pairs, labels }: MatchedPairsProps) {
                 label: pair.matchMethod,
                 color: 'bg-gray-800 text-gray-400',
               };
+              const hasRelated = pair.relatedTransactions && pair.relatedTransactions.length > 1;
               return (
-                <tr
+                <><tr
                   key={i}
                   className={`border-b border-gray-800/50 hover:bg-blue-950/20 transition-colors ${
                     i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-800/20'
                   }`}
                 >
                   {/* Source A */}
-                  <td className="px-2 py-2 text-center text-xs text-gray-600 font-mono">
+                  <td className="px-1.5 py-1.5 text-center text-[10px] text-gray-600 font-mono">
                     {pair.sourceATransaction.sourceRow}
                   </td>
-                  <td className="px-2 py-2 whitespace-nowrap text-gray-300 font-medium">
+                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-gray-300">
                     {formatDate(pair.sourceATransaction.date)}
                   </td>
                   <td
-                    className="px-2 py-2 max-w-[160px] truncate text-gray-300"
-                    title={pair.sourceATransaction.description}
+                    className="px-1.5 py-1.5 truncate text-xs text-gray-300"
+                    title={pair.sourceATransaction.rawDescription || pair.sourceATransaction.description}
                   >
                     {pair.sourceATransaction.description}
                   </td>
-                  <td className="px-2 py-2 max-w-[140px] truncate text-gray-500 italic text-xs" title={pair.sourceATransaction.rawDescription}>
-                    {pair.sourceATransaction.rawDescription !== pair.sourceATransaction.description ? pair.sourceATransaction.rawDescription : '—'}
-                  </td>
-                  <td className="px-2 py-2 text-gray-500 font-mono text-xs">
+                  <td className="px-1.5 py-1.5 text-gray-500 font-mono text-[10px] truncate">
                     {pair.sourceATransaction.reference || '—'}
                   </td>
-                  <td className="px-2 py-2 text-right font-mono whitespace-nowrap font-semibold text-gray-200">
+                  <td className="px-1.5 py-1.5 text-right font-mono whitespace-nowrap text-xs font-semibold text-gray-200">
                     {formatMoney(pair.sourceATransaction.amount)}
-                  </td>
-                  <td className="px-2 py-2 text-right font-mono whitespace-nowrap text-xs text-gray-500">
-                    {pair.sourceATransaction.rawAmount}
                   </td>
 
                   {/* Source B */}
-                  <td className="px-2 py-2 text-center text-xs text-gray-600 font-mono border-l-2 border-l-gray-700">
+                  <td className="px-1.5 py-1.5 text-center text-[10px] text-gray-600 font-mono border-l-2 border-l-gray-700">
                     {pair.sourceBTransaction.sourceRow}
                   </td>
-                  <td className="px-2 py-2 whitespace-nowrap text-gray-300 font-medium">
+                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-gray-300">
                     {formatDate(pair.sourceBTransaction.date)}
                   </td>
                   <td
-                    className="px-2 py-2 max-w-[160px] truncate text-gray-300"
-                    title={pair.sourceBTransaction.description}
+                    className="px-1.5 py-1.5 truncate text-xs text-gray-300"
+                    title={pair.sourceBTransaction.rawDescription || pair.sourceBTransaction.description}
                   >
                     {pair.sourceBTransaction.description}
                   </td>
-                  <td className="px-2 py-2 max-w-[140px] truncate text-gray-500 italic text-xs" title={pair.sourceBTransaction.rawDescription}>
-                    {pair.sourceBTransaction.rawDescription !== pair.sourceBTransaction.description ? pair.sourceBTransaction.rawDescription : '—'}
-                  </td>
-                  <td className="px-2 py-2 text-gray-500 font-mono text-xs">
+                  <td className="px-1.5 py-1.5 text-gray-500 font-mono text-[10px] truncate">
                     {pair.sourceBTransaction.reference || '—'}
                   </td>
-                  <td className="px-2 py-2 text-right font-mono whitespace-nowrap font-semibold text-gray-200">
+                  <td className="px-1.5 py-1.5 text-right font-mono whitespace-nowrap text-xs font-semibold text-gray-200">
                     {formatMoney(pair.sourceBTransaction.amount)}
-                  </td>
-                  <td className="px-2 py-2 text-right font-mono whitespace-nowrap text-xs text-gray-500">
-                    {pair.sourceBTransaction.rawAmount}
                   </td>
 
                   {/* Result */}
-                  <td className="px-2 py-2 text-center border-l-2 border-l-gray-700">
+                  <td className="px-1.5 py-1.5 text-center border-l-2 border-l-gray-700">
                     <ConfidenceBadge confidence={pair.confidence} />
                   </td>
-                  <td className="px-2 py-2 text-center">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${method.color}`}>
+                  <td className="px-1.5 py-1.5 text-center">
+                    <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${method.color}`}>
                       {method.label}
                     </span>
                   </td>
-                  <td className={`px-2 py-2 text-right font-mono text-xs whitespace-nowrap ${
+                  <td className={`px-1.5 py-1.5 text-right font-mono text-[10px] whitespace-nowrap ${
                     pair.amountDifference > 0 ? 'text-red-400 font-semibold' : 'text-gray-600'
                   }`}>
                     {pair.amountDifference > 0 ? formatMoney(pair.amountDifference) : '—'}
                   </td>
-                  <td className={`px-2 py-2 text-center text-xs ${
+                  <td className={`px-1.5 py-1.5 text-center text-[10px] ${
                     pair.dateDifferenceInDays > 0 ? 'text-yellow-400 font-semibold' : 'text-gray-600'
                   }`}>
                     {pair.dateDifferenceInDays > 0 ? `${pair.dateDifferenceInDays}d` : '—'}
                   </td>
                 </tr>
+                {hasRelated && (
+                  <tr key={`${i}-related`} className="bg-cyan-950/10 border-b border-cyan-800/30">
+                    <td colSpan={14} className="px-4 py-1.5 text-[10px] text-cyan-400">
+                      <span className="font-semibold">Agrupadas ({pair.relatedTransactions!.length}):</span>
+                      {pair.relatedTransactions!.map((rt, ri) => (
+                        <span key={ri} className="ml-2 inline-flex items-center gap-1">
+                          <span className="text-gray-500">{formatDate(rt.date)}</span>
+                          <span className="truncate max-w-[120px]">{rt.description}</span>
+                          <span className="font-mono font-semibold">{formatMoney(rt.amount)}</span>
+                          {ri < pair.relatedTransactions!.length - 1 && <span className="text-gray-600 ml-1">|</span>}
+                        </span>
+                      ))}
+                    </td>
+                  </tr>
+                )}
+                </>
               );
             })}
           </tbody>
@@ -183,7 +185,7 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   else colorClass = 'bg-orange-900/40 text-orange-400';
 
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${colorClass}`}>
+    <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${colorClass}`}>
       {pct}%
     </span>
   );

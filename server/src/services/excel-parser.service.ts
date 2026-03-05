@@ -28,8 +28,6 @@ export async function parseExcelFile(filePath: string): Promise<ParsedSheet> {
     worksheet.lastRow?.number ?? 0,
     worksheet.rowCount
   );
-  console.log(`[EXCEL PARSE] dims=${dims?.top}:${dims?.bottom}, lastRow=${worksheet.lastRow?.number}, rowCount=${worksheet.rowCount} → iterando hasta ${lastRowNum}`);
-
   for (let rowNum = 1; rowNum <= lastRowNum; rowNum++) {
     const row = worksheet.getRow(rowNum);
     const values = row.values as (string | number | Date | null)[];
@@ -62,32 +60,26 @@ export async function parseExcelFile(filePath: string): Promise<ParsedSheet> {
 
   // Filtrar filas que no son datos reales de transacciones.
   const headerFingerprint = headers.map(h => h.toLowerCase().trim()).join('|');
-  const beforeCount = rows.length;
 
-  rows = rows.filter((row, idx) => {
+  rows = rows.filter((row) => {
     // 1. Descartar filas de encabezados de columna repetidos (exports multi-página)
     const rowFingerprint = row.map(c => c.toLowerCase().trim()).join('|');
     if (rowFingerprint === headerFingerprint) {
-      console.log(`[FILTER] Fila ${idx}: REPETIDA HEADER → descartada`);
       return false;
     }
 
     // 2. Descartar filas con metadatos de página (empresa, NIT, periodo, etc.)
     if (isPageMetadata(row)) {
-      console.log(`[FILTER] Fila ${idx}: METADATA → descartada |`, row.filter(c => c.trim()).join(' | '));
       return false;
     }
 
     // 3. Debe tener fecha + monto numérico para ser transacción válida
     if (!looksLikeDataRow(row)) {
-      console.log(`[FILTER] Fila ${idx}: SIN fecha+monto → descartada |`, row.filter(c => c.trim()).join(' | '));
       return false;
     }
 
     return true;
   });
-
-  console.log(`[FILTER] ${beforeCount} filas → ${rows.length} filas después de filtrar`);
 
   return {
     headers,

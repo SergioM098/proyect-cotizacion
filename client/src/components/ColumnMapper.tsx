@@ -32,7 +32,7 @@ const FIELD_COLORS: Record<MappingField, string> = {
 
 export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: ColumnMapperProps) {
   const labels = RECONCILIATION_LABELS[reconciliationType];
-  const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const sourceAMapping = buildColumnMapping(uploadData.sourceAAutoMapping);
@@ -45,10 +45,12 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
   const handleReconcile = async () => {
     if (hasErrors) return;
 
-    setLoading(true);
+    setLoadingStep('Normalizando transacciones...');
     setError(null);
 
     try {
+      await new Promise(r => setTimeout(r, 50));
+      setLoadingStep('Ejecutando conciliación...');
       const result = await runReconciliation({
         sessionId: uploadData.sessionId,
         reconciliationType,
@@ -56,11 +58,12 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
         sourceBMapping,
         amountTolerance: 0.01,
       });
+      setLoadingStep('Preparando resultados...');
       onReconcile(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al conciliar');
     } finally {
-      setLoading(false);
+      setLoadingStep(null);
     }
   };
 
@@ -93,10 +96,17 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
       <div className="flex justify-center">
         <button
           onClick={handleReconcile}
-          disabled={loading || hasErrors}
+          disabled={!!loadingStep || hasErrors}
           className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {loading ? 'Conciliando...' : 'Ejecutar conciliación'}
+          {loadingStep ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="spinner" />
+              {loadingStep}
+            </span>
+          ) : (
+            'Ejecutar conciliación'
+          )}
         </button>
       </div>
     </div>

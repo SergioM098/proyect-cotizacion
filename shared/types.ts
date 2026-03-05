@@ -53,7 +53,8 @@ export type MatchMethod =
   | 'amount_date'
   | 'amount_reference'
   | 'amount_fuzzy'
-  | 'fuzzy';
+  | 'fuzzy'
+  | 'many_to_one';
 
 export interface MatchedPair {
   sourceATransaction: Transaction;
@@ -62,6 +63,7 @@ export interface MatchedPair {
   matchMethod: MatchMethod;
   amountDifference: number;
   dateDifferenceInDays: number;
+  relatedTransactions?: Transaction[];
 }
 
 export interface ReconciliationSummary {
@@ -113,6 +115,23 @@ export interface UploadResponse {
   reconciliationType: ReconciliationType;
   sourceAPreview: FilePreview;
   sourceBPreview: FilePreview;
+}
+
+// ========================================
+// MULTI-HOJA EXCEL
+// ========================================
+
+export interface WorksheetInfo {
+  name: string;
+  index: number;
+  rowCount: number;
+}
+
+export interface SheetSelectionRequired {
+  sessionId: string;
+  requiresSheetSelection: true;
+  sourceASheets?: WorksheetInfo[];
+  sourceBSheets?: WorksheetInfo[];
 }
 
 export interface ReconcileRequest {

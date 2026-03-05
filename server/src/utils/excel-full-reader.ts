@@ -1,4 +1,3 @@
-console.log('>>>>>> EXCEL-FULL-READER CARGADO <<<<<<');
 /**
  * Lector de Excel que maneja archivos donde ExcelJS pierde filas al final
  * porque el elemento <dimension> del XML no cubre todas las filas con datos.
@@ -6,6 +5,7 @@ console.log('>>>>>> EXCEL-FULL-READER CARGADO <<<<<<');
  */
 import ExcelJS from 'exceljs';
 import fs from 'fs';
+import type { WorksheetInfo } from '../../../shared/types.js';
 
 async function patchedExcelBuffer(filePath: string): Promise<Buffer | Uint8Array> {
   const raw = fs.readFileSync(filePath);
@@ -13,38 +13,39 @@ async function patchedExcelBuffer(filePath: string): Promise<Buffer | Uint8Array
     const { default: JSZip } = await import('jszip');
     const zip = await JSZip.loadAsync(raw);
 
-    // Encontrar la hoja de trabajo en el ZIP
-    const sheetKey = Object.keys(zip.files).find(k =>
+    // Parchear TODAS las hojas (no solo la primera)
+    const sheetKeys = Object.keys(zip.files).filter(k =>
       /xl\/worksheets\/sheet\d+\.xml$/i.test(k)
     );
-    if (!sheetKey) return raw;
+    if (sheetKeys.length === 0) return raw;
 
-    let xml = await zip.files[sheetKey].async('string');
+    let modified = false;
+    for (const sheetKey of sheetKeys) {
+      let xml = await zip.files[sheetKey].async('string');
 
-    // Encontrar el número real máximo de fila en el XML
-    const rowNums: number[] = [];
-    const rx = /<row\b[^>]*\br="(\d+)"/g;
-    let m: RegExpExecArray | null;
-    while ((m = rx.exec(xml)) !== null) rowNums.push(parseInt(m[1], 10));
-    if (rowNums.length === 0) return raw;
+      const rowNums: number[] = [];
+      const rx = /<row\b[^>]*\br="(\d+)"/g;
+      let m: RegExpExecArray | null;
+      while ((m = rx.exec(xml)) !== null) rowNums.push(parseInt(m[1], 10));
+      if (rowNums.length === 0) continue;
 
-    const trueMax = Math.max(...rowNums);
-    console.log(`[EXCEL READER] Archivo: ${filePath.split(/[\\/]/).pop()}, max fila XML = ${trueMax}`);
+      const trueMax = Math.max(...rowNums);
+      const patched = xml.replace(
+        /(<dimension\s+ref="[A-Z]+\d+:[A-Z]+)\d+(")/,
+        (_, pre, post) => `${pre}${trueMax}${post}`
+      );
 
-    // Parchear <dimension ref="A1:J60"/> → <dimension ref="A1:J{trueMax}"/>
-    const patched = xml.replace(
-      /(<dimension\s+ref="[A-Z]+\d+:[A-Z]+)\d+(")/,
-      (_, pre, post) => `${pre}${trueMax}${post}`
-    );
+      if (patched !== xml) {
+        zip.file(sheetKey, patched);
+        modified = true;
+      }
+    }
 
-    if (patched !== xml) {
-      console.log(`[EXCEL READER] dimension parcheada hasta fila ${trueMax}`);
-      zip.file(sheetKey, patched);
+    if (modified) {
       return new Uint8Array(await zip.generateAsync({ type: 'arraybuffer' }));
     }
     return raw;
-  } catch (e) {
-    console.log('[EXCEL READER] Error al parchear, usando original:', (e as Error).message);
+  } catch {
     return raw;
   }
 }
@@ -54,17 +55,35 @@ export interface ParsedExcelResult {
   rows: string[][];
 }
 
-export async function readExcelFull(filePath: string): Promise<ParsedExcelResult> {
-  console.log(`[readExcelFull] LLAMADA con: ${filePath}`);
+/**
+ * Lista las hojas de un archivo Excel sin parsear su contenido.
+ */
+export async function listExcelSheets(filePath: string): Promise<WorksheetInfo[]> {
+  const raw = fs.readFileSync(filePath);
+  const workbook = new ExcelJS.Workbook();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await workbook.xlsx.load(raw as any);
+
+  return workbook.worksheets.map((ws, i) => ({
+    name: ws.name,
+    index: i,
+    rowCount: ws.rowCount || 0,
+  }));
+}
+
+/**
+ * Lee una hoja específica de un archivo Excel.
+ * @param sheetIndex Índice de la hoja (0-based). Por defecto lee la primera.
+ */
+export async function readExcelFull(filePath: string, sheetIndex: number = 0): Promise<ParsedExcelResult> {
   const buffer = await patchedExcelBuffer(filePath);
-  console.log(`[readExcelFull] buffer obtenido, tamaño=${buffer.length}`);
 
   const workbook = new ExcelJS.Workbook();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await workbook.xlsx.load(buffer as any);
 
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet) throw new Error('El archivo Excel no contiene hojas de cálculo');
+  const worksheet = workbook.worksheets[sheetIndex];
+  if (!worksheet) throw new Error('La hoja seleccionada no existe en el archivo Excel');
 
   const maxCols = worksheet.columnCount || 1;
   const allRows: string[][] = [];
@@ -76,8 +95,6 @@ export async function readExcelFull(filePath: string): Promise<ParsedExcelResult
       allRows.push(cells);
     }
   });
-
-  console.log(`[EXCEL READER] ${allRows.length} filas no vacías leídas`);
 
   if (allRows.length === 0) return { headers: [], rows: [] };
 
@@ -93,12 +110,6 @@ export async function readExcelFull(filePath: string): Promise<ParsedExcelResult
     rows = allRows.slice(1);
   }
 
-  console.log(`[EXCEL READER] Header en índice ${headerIdx}, ${rows.length} filas de datos`);
-  console.log(`[EXCEL READER] Headers: ${headers.join(' | ')}`);
-  // Mostrar las primeras 10 filas para debug
-  rows.slice(0, 10).forEach((row, i) => {
-    console.log(`[EXCEL READER] Fila ${i}: ${row.filter(c => c.trim()).join(' | ')}`);
-  });
   return { headers, rows };
 }
 
@@ -132,6 +143,11 @@ function findHeader(rows: string[][]): number {
     const row = rows[i];
     const nonEmpty = row.filter(c => c.trim() !== '').length;
     if (nonEmpty < 3) continue;
+
+    // Saltar filas con celdas fusionadas (todas iguales — ExcelJS expande merges)
+    const uniqueValues = new Set(row.filter(c => c.trim() !== '').map(c => c.trim().toLowerCase()));
+    if (uniqueValues.size === 1 && nonEmpty > 3) continue;
+
     let matches = 0;
     for (const cell of row) {
       const lower = cell.toLowerCase().trim();

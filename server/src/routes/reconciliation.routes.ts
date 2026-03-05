@@ -4,18 +4,20 @@ import { normalizeTransactions } from '../services/normalizer.service.js';
 import { reconcile } from '../services/reconciliation.service.js';
 import type { ReconcileRequest, ReconciliationResult, Transaction } from '../../../shared/types.js';
 import { RECONCILIATION_LABELS } from '../utils/labels.js';
+import { TtlMap } from '../utils/ttl-map.js';
 import ExcelJS from 'exceljs';
 
 export const reconciliationRouter = Router();
 
-const results = new Map<string, ReconciliationResult>();
+// Resultados expiran después de 2 horas
+const results = new TtlMap<ReconciliationResult>(2 * 60 * 60 * 1000);
 
 reconciliationRouter.post('/reconcile', (req, res, next) => {
   try {
     const body = req.body as ReconcileRequest;
     const { sessionId, sourceAMapping, sourceBMapping, reconciliationType } = body;
     const dateTolerance = body.dateTolerance ?? 3;
-    const amountTolerance = body.amountTolerance ?? 0.01;
+    const amountTolerance = body.amountTolerance ?? 1.00;
 
     const session = sessions.get(sessionId);
     if (!session) {
@@ -126,25 +128,25 @@ reconciliationRouter.get('/export/:id', async (req, res, next) => {
       // Sección 1: (+) Consignaciones en extracto y no en libros
       row = writeTransactionSection(sheet, row,
         '(+) CONSIGNACIONES EN EXTRACTO Y NO EN LIBROS',
-        consignacionesExtracto, true);
+        consignacionesExtracto, false);
       row++;
 
       // Sección 2: (-) Pagos en extractos y no en libros (incluye gastos bancarios)
       row = writeTransactionSection(sheet, row,
         '(-) PAGOS EN EXTRACTOS Y NO EN LIBROS',
-        pagosExtracto, true);
+        pagosExtracto, false);
       row++;
 
       // Sección 3: (+) Pagos en libros y no en extracto
       row = writeTransactionSection(sheet, row,
         '(+) PAGOS EN LIBROS Y NO EN EXTRACTO',
-        pagosLibros, true);
+        pagosLibros, false);
       row++;
 
       // Sección 4: (-) Consignaciones en libros y no en extracto
       row = writeTransactionSection(sheet, row,
         '(-) CONSIGNACIONES EN LIBROS Y NO EN EXTRACTO',
-        consignacionesLibros, true);
+        consignacionesLibros, false);
       row++;
     } else {
       // Conciliación entre cuentas: 2 secciones
@@ -199,8 +201,9 @@ reconciliationRouter.get('/export/:id', async (req, res, next) => {
     const matchedHeaders = [
       `Fecha ${labels.sourceA}`, `Descripción ${labels.sourceA}`, `Monto ${labels.sourceA}`,
       `Fecha ${labels.sourceB}`, `Descripción ${labels.sourceB}`, `Monto ${labels.sourceB}`,
-      'Confianza', 'Método',
+      'Confianza', 'Método', 'Agrupados',
     ];
+    matchedSheet.getColumn(9).width = 40;
     for (let i = 0; i < matchedHeaders.length; i++) {
       const cell = matchedSheet.getCell(mRow, i + 1);
       cell.value = matchedHeaders[i];
@@ -238,6 +241,16 @@ reconciliationRouter.get('/export/:id', async (req, res, next) => {
       matchedSheet.getCell(mRow, 7).alignment = { horizontal: 'center' };
       matchedSheet.getCell(mRow, 8).value = m.matchMethod;
       matchedSheet.getCell(mRow, 8).border = thinBorder();
+
+      // Columna de agrupados (N:1)
+      const groupCell = matchedSheet.getCell(mRow, 9);
+      if (m.relatedTransactions && m.relatedTransactions.length > 0) {
+        groupCell.value = m.relatedTransactions
+          .map(rt => `${rt.date} | ${rt.description} | ${rt.amount}`)
+          .join('\n');
+        groupCell.alignment = { wrapText: true, vertical: 'top' };
+      }
+      groupCell.border = thinBorder();
       mRow++;
     }
 

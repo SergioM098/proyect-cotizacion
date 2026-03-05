@@ -104,6 +104,15 @@ function normalizeDate(value: string): string {
     return `${year}-${month}-${day}`;
   }
 
+  // d/MM o dd/MM (sin año, común en extractos bancarios colombianos)
+  const dm = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  if (dm) {
+    const day = dm[1].padStart(2, '0');
+    const month = dm[2].padStart(2, '0');
+    const year = new Date().getFullYear().toString();
+    return `${year}-${month}-${day}`;
+  }
+
   // Intentar parsear como Date de JS (por si viene en otro formato)
   const parsed = new Date(trimmed);
   if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 1900) {
@@ -145,7 +154,7 @@ function normalizeAmount(value: string): number {
 /**
  * Intenta detectar automáticamente qué columna corresponde a qué campo.
  */
-export function autoDetectColumns(headers: string[]): Partial<ColumnMapping> {
+export function autoDetectColumns(headers: string[], sampleRows?: string[][]): Partial<ColumnMapping> {
   const mapping: Partial<ColumnMapping> = {};
   const lower = headers.map((h) => h.toLowerCase().trim());
 
@@ -163,8 +172,25 @@ export function autoDetectColumns(headers: string[]): Partial<ColumnMapping> {
   );
   if (descIdx !== -1) mapping.description = descIdx;
 
+  // Si la columna de descripción tiene muy baja variedad (ej: siempre dice
+  // "Bancolombia Cta Aho"), buscar una columna alternativa más descriptiva
+  if (mapping.description !== undefined && sampleRows && sampleRows.length > 3) {
+    const di = mapping.description as number;
+    const sample = sampleRows.slice(0, 20);
+    const uniqueVals = new Set(sample.map(r => (r[di] ?? '').trim().toLowerCase()).filter(Boolean));
+    if (uniqueVals.size <= 2) {
+      const altDescKeywords = ['nombre', 'tercero', 'beneficiario', 'cliente', 'proveedor', 'pagador'];
+      const altIdx = lower.findIndex((h, i) =>
+        i !== di && altDescKeywords.some(k => h.includes(k))
+      );
+      if (altIdx !== -1) {
+        mapping.description = altIdx;
+      }
+    }
+  }
+
   // Referencia
-  const refKeywords = ['referencia', 'ref', 'reference', 'num', 'número', 'numero', 'td', 'documento', 'doc'];
+  const refKeywords = ['referencia', 'ref', 'reference', 'num', 'número', 'numero', 'td', 'documento', 'doc', 'dcto', 'comprobante'];
   const refIdx = lower.findIndex((h) =>
     refKeywords.some((k) => h.includes(k))
   );

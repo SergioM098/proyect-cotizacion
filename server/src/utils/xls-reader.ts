@@ -1,7 +1,8 @@
 /**
  * Lector de archivos .xls (formato binario antiguo) usando SheetJS.
  */
-import XLSX from 'xlsx';
+import * as XLSX from 'xlsx';
+import type { WorksheetInfo } from '../../../shared/types.js';
 
 export interface ParsedXlsResult {
   headers: string[];
@@ -14,10 +15,26 @@ const HEADER_KWS = [
   'referencia', 'ref', 'documento', 'cheque', 'nombre', 'movimiento',
 ];
 
-export function readXlsFile(filePath: string): ParsedXlsResult {
+/**
+ * Lista las hojas de un archivo .xls sin parsear su contenido.
+ */
+export function listXlsSheets(filePath: string): WorksheetInfo[] {
+  const workbook = XLSX.readFile(filePath, { bookSheets: true });
+  return workbook.SheetNames.map((name, index) => ({
+    name,
+    index,
+    rowCount: 0, // SheetJS con bookSheets no carga datos, no podemos saber rowCount
+  }));
+}
+
+/**
+ * Lee una hoja específica de un archivo .xls.
+ * @param sheetIndex Índice de la hoja (0-based). Por defecto lee la primera.
+ */
+export function readXlsFile(filePath: string, sheetIndex: number = 0): ParsedXlsResult {
   const workbook = XLSX.readFile(filePath);
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) throw new Error('El archivo Excel no contiene hojas de cálculo');
+  const sheetName = workbook.SheetNames[sheetIndex];
+  if (!sheetName) throw new Error('La hoja seleccionada no existe en el archivo Excel');
 
   const sheet = workbook.Sheets[sheetName];
   // raw:false formatea fechas como strings, defval para celdas vacías

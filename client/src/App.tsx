@@ -1,29 +1,56 @@
 import { useState } from 'react';
 import type { ReconciliationResult, ReconciliationType } from '@shared/types';
 import { RECONCILIATION_LABELS } from '@shared/types';
-import type { UploadResult } from './services/api';
+import type { UploadResult, UploadFileResult, SheetSelectionResponse } from './services/api';
+import { selectSheets } from './services/api';
 import { FileUpload } from './components/FileUpload';
 import { ColumnMapper } from './components/ColumnMapper';
 import { ReconciliationResults } from './components/ReconciliationResults';
+import { SheetSelector } from './components/SheetSelector';
 
-type Step = 'select' | 'upload' | 'mapping' | 'results';
+type Step = 'select' | 'upload' | 'sheet-select' | 'mapping' | 'results';
 
 export default function App() {
   const [step, setStep] = useState<Step>('select');
   const [reconciliationType, setReconciliationType] = useState<ReconciliationType>('bank');
   const [uploadData, setUploadData] = useState<UploadResult | null>(null);
   const [results, setResults] = useState<ReconciliationResult | null>(null);
+  const [sheetSelection, setSheetSelection] = useState<SheetSelectionResponse | null>(null);
+  const [sheetLoading, setSheetLoading] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
 
   const labels = RECONCILIATION_LABELS[reconciliationType];
+  const hasSheetStep = sheetSelection !== null;
 
   const handleTypeSelect = (type: ReconciliationType) => {
     setReconciliationType(type);
     setStep('upload');
   };
 
-  const handleUploadComplete = (data: UploadResult) => {
-    setUploadData(data);
-    setStep('mapping');
+  const handleUploadComplete = (data: UploadFileResult) => {
+    if ('requiresSheetSelection' in data && data.requiresSheetSelection) {
+      setSheetSelection(data);
+      setStep('sheet-select');
+    } else {
+      setUploadData(data as UploadResult);
+      setStep('mapping');
+    }
+  };
+
+  const handleSheetSelect = async (sourceAIndex: number, sourceBIndex: number) => {
+    if (!sheetSelection) return;
+    setSheetLoading(true);
+    setSheetError(null);
+    try {
+      const result = await selectSheets(sheetSelection.sessionId, sourceAIndex, sourceBIndex);
+      setUploadData(result);
+      setSheetSelection(null);
+      setStep('mapping');
+    } catch (err) {
+      setSheetError(err instanceof Error ? err.message : 'Error al seleccionar hojas');
+    } finally {
+      setSheetLoading(false);
+    }
   };
 
   const handleReconcileComplete = (data: ReconciliationResult) => {
@@ -35,12 +62,17 @@ export default function App() {
     setStep('select');
     setUploadData(null);
     setResults(null);
+    setSheetSelection(null);
+    setSheetError(null);
   };
+
+  const isAfterUpload = step === 'sheet-select' || step === 'mapping' || step === 'results';
+  const isAfterSheets = step === 'mapping' || step === 'results';
 
   return (
     <div className="min-h-screen bg-gray-950">
       <header className="bg-gray-900 border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-100">
               {step === 'select' ? 'Conciliaciones' : labels.title}
@@ -60,18 +92,29 @@ export default function App() {
                 number={1}
                 label="Subir archivos"
                 active={step === 'upload'}
-                completed={step === 'mapping' || step === 'results'}
+                completed={isAfterUpload}
               />
               <div className="h-px w-8 bg-gray-700" />
+              {hasSheetStep && (
+                <>
+                  <StepIndicator
+                    number={2}
+                    label="Seleccionar hojas"
+                    active={step === 'sheet-select'}
+                    completed={isAfterSheets}
+                  />
+                  <div className="h-px w-8 bg-gray-700" />
+                </>
+              )}
               <StepIndicator
-                number={2}
+                number={hasSheetStep ? 3 : 2}
                 label="Mapear columnas"
                 active={step === 'mapping'}
                 completed={step === 'results'}
               />
               <div className="h-px w-8 bg-gray-700" />
               <StepIndicator
-                number={3}
+                number={hasSheetStep ? 4 : 3}
                 label="Resultados"
                 active={step === 'results'}
                 completed={false}
@@ -81,7 +124,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {step === 'select' && (
           <TypeSelector onSelect={handleTypeSelect} />
         )}
@@ -90,6 +133,21 @@ export default function App() {
             reconciliationType={reconciliationType}
             onComplete={handleUploadComplete}
           />
+        )}
+        {step === 'sheet-select' && sheetSelection && (
+          <div className="space-y-4">
+            <SheetSelector
+              sourceASheets={sheetSelection.sourceASheets}
+              sourceBSheets={sheetSelection.sourceBSheets}
+              onSelect={handleSheetSelect}
+              loading={sheetLoading}
+            />
+            {sheetError && (
+              <div className="max-w-lg mx-auto bg-red-950/30 border border-red-800/50 text-red-400 px-4 py-3 rounded-lg">
+                {sheetError}
+              </div>
+            )}
+          </div>
         )}
         {step === 'mapping' && uploadData && (
           <ColumnMapper
@@ -117,7 +175,7 @@ function TypeSelector({ onSelect }: { onSelect: (type: ReconciliationType) => vo
           onClick={() => onSelect('bank')}
           className="bg-gray-900 rounded-xl border border-gray-800 hover:border-blue-500/50 p-8 text-left transition-all"
         >
-          <div className="text-4xl mb-4">🏦</div>
+          <div className="text-4xl mb-4">{'\uD83C\uDFE6'}</div>
           <h3 className="text-lg font-semibold text-gray-100 mb-2">
             Conciliaci&oacute;n Bancaria
           </h3>
@@ -131,7 +189,7 @@ function TypeSelector({ onSelect }: { onSelect: (type: ReconciliationType) => vo
           onClick={() => onSelect('accounts')}
           className="bg-gray-900 rounded-xl border border-gray-800 hover:border-blue-500/50 p-8 text-left transition-all"
         >
-          <div className="text-4xl mb-4">📊</div>
+          <div className="text-4xl mb-4">{'\uD83D\uDCCA'}</div>
           <h3 className="text-lg font-semibold text-gray-100 mb-2">
             Conciliaci&oacute;n entre Cuentas
           </h3>

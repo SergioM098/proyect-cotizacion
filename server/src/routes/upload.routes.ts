@@ -1,5 +1,3 @@
-// v5
-console.log('>>>>>> UPLOAD ROUTES V5 CARGADO <<<<<<');
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
@@ -7,11 +5,17 @@ import { upload } from '../middleware/upload.middleware.js';
 import { parsePdfFile } from '../services/pdf-parser.service.js';
 import { parseCsvFile } from '../services/csv-parser.service.js';
 import { autoDetectColumns } from '../services/normalizer.service.js';
-import { readExcelFull } from '../utils/excel-full-reader.js';
-import type { FilePreview, ReconciliationType } from '../../../shared/types.js';
+import { readExcelFull, listExcelSheets } from '../utils/excel-full-reader.js';
+import { readXlsFile, listXlsSheets } from '../utils/xls-reader.js';
+import type { FilePreview, ReconciliationType, WorksheetInfo } from '../../../shared/types.js';
+import { TtlMap } from '../utils/ttl-map.js';
 
 export interface SessionData {
   reconciliationType: ReconciliationType;
+  sourceAFilePath?: string;
+  sourceBFilePath?: string;
+  sourceASheets?: WorksheetInfo[];
+  sourceBSheets?: WorksheetInfo[];
   sourceAHeaders: string[];
   sourceARows: string[][];
   sourceBHeaders: string[];
@@ -20,7 +24,8 @@ export interface SessionData {
   sourceBAutoMapping: ReturnType<typeof autoDetectColumns>;
 }
 
-export const sessions = new Map<string, SessionData>();
+// Sesiones expiran después de 30 min de inactividad
+export const sessions = new TtlMap<SessionData>(30 * 60 * 1000);
 
 export const uploadRouter = Router();
 
@@ -45,41 +50,69 @@ uploadRouter.post(
       const sourceAFile = files.sourceAFile[0];
       const sourceBFile = files.sourceBFile[0];
 
+      // Detectar archivos Excel con múltiples hojas
+      const extA = path.extname(sourceAFile.originalname).toLowerCase();
+      const extB = path.extname(sourceBFile.originalname).toLowerCase();
+
+      let sourceASheets: WorksheetInfo[] | undefined;
+      let sourceBSheets: WorksheetInfo[] | undefined;
+
+      if (extA === '.xlsx') {
+        const sheets = await listExcelSheets(sourceAFile.path);
+        if (sheets.length > 1) sourceASheets = sheets;
+      } else if (extA === '.xls') {
+        const sheets = listXlsSheets(sourceAFile.path);
+        if (sheets.length > 1) sourceASheets = sheets;
+      }
+      if (extB === '.xlsx') {
+        const sheets = await listExcelSheets(sourceBFile.path);
+        if (sheets.length > 1) sourceBSheets = sheets;
+      } else if (extB === '.xls') {
+        const sheets = listXlsSheets(sourceBFile.path);
+        if (sheets.length > 1) sourceBSheets = sheets;
+      }
+
+      // Si algún archivo tiene múltiples hojas, pausar para selección
+      if (sourceASheets || sourceBSheets) {
+        const sessionId = uuidv4();
+        sessions.set(sessionId, {
+          reconciliationType,
+          sourceAFilePath: sourceAFile.path,
+          sourceBFilePath: sourceBFile.path,
+          sourceASheets,
+          sourceBSheets,
+          sourceAHeaders: [],
+          sourceARows: [],
+          sourceBHeaders: [],
+          sourceBRows: [],
+          sourceAAutoMapping: {},
+          sourceBAutoMapping: {},
+        });
+
+        res.json({
+          sessionId,
+          requiresSheetSelection: true,
+          sourceASheets,
+          sourceBSheets,
+        });
+        return;
+      }
+
+      // Flujo normal: archivos de una sola hoja
       const sourceARaw = await parseFile(sourceAFile);
       const sourceBRaw = await parseFile(sourceBFile);
 
-      // Debug: últimas filas CRUDAS antes de filtrar
-      console.log(`[RAW Source B] Total crudas: ${sourceBRaw.rows.length}`);
-      sourceBRaw.rows.slice(-5).forEach((row, i) => {
-        const idx = sourceBRaw.rows.length - 5 + i;
-        console.log(`[RAW Source B] Fila cruda ${idx}: ${row.filter(c => (c ?? '').trim()).join(' | ')}`);
-      });
-
-      // Filtrar filas que no son transacciones reales
       const sourceAParsed = {
         headers: sourceARaw.headers,
-        rows: filterDataRows(sourceARaw.headers, sourceARaw.rows, 'Source A'),
+        rows: filterDataRows(sourceARaw.headers, sourceARaw.rows),
       };
       const sourceBParsed = {
         headers: sourceBRaw.headers,
-        rows: filterDataRows(sourceBRaw.headers, sourceBRaw.rows, 'Source B'),
+        rows: filterDataRows(sourceBRaw.headers, sourceBRaw.rows),
       };
 
-      // Debug: ver qué se parseó
-      console.log('=== SOURCE A (Banco) ===');
-      console.log('Headers:', sourceAParsed.headers);
-      console.log('Primera fila:', sourceAParsed.rows[0]);
-      console.log('Total filas:', sourceAParsed.rows.length);
-      console.log('=== SOURCE B (Libro) ===');
-      console.log('Headers:', sourceBParsed.headers);
-      console.log('Primera fila:', sourceBParsed.rows[0]);
-      console.log('Total filas:', sourceBParsed.rows.length);
-
-      const sourceAAutoMapping = autoDetectColumns(sourceAParsed.headers);
-      const sourceBAutoMapping = autoDetectColumns(sourceBParsed.headers);
-
-      console.log('Auto-mapping A:', sourceAAutoMapping);
-      console.log('Auto-mapping B:', sourceBAutoMapping);
+      const sourceAAutoMapping = autoDetectColumns(sourceAParsed.headers, sourceAParsed.rows);
+      const sourceBAutoMapping = autoDetectColumns(sourceBParsed.headers, sourceBParsed.rows);
 
       const sessionId = uuidv4();
       sessions.set(sessionId, {
@@ -118,90 +151,142 @@ uploadRouter.post(
   }
 );
 
+// Endpoint para seleccionar hojas en archivos multi-hoja
+uploadRouter.post('/select-sheets', async (req, res, next) => {
+  try {
+    const { sessionId, sourceASheetIndex, sourceBSheetIndex } = req.body;
+    const session = sessions.get(sessionId);
+    if (!session) {
+      res.status(404).json({ error: 'Sesión no encontrada. Sube los archivos nuevamente.' });
+      return;
+    }
+
+    if (!session.sourceAFilePath || !session.sourceBFilePath) {
+      res.status(400).json({ error: 'Sesión sin archivos asociados.' });
+      return;
+    }
+
+    const sourceAIdx = sourceASheetIndex ?? 0;
+    const sourceBIdx = sourceBSheetIndex ?? 0;
+
+    const sourceARaw = await parseFileByPath(session.sourceAFilePath, sourceAIdx);
+    const sourceBRaw = await parseFileByPath(session.sourceBFilePath, sourceBIdx);
+
+    const sourceAParsed = {
+      headers: sourceARaw.headers,
+      rows: filterDataRows(sourceARaw.headers, sourceARaw.rows),
+    };
+    const sourceBParsed = {
+      headers: sourceBRaw.headers,
+      rows: filterDataRows(sourceBRaw.headers, sourceBRaw.rows),
+    };
+
+    const sourceAAutoMapping = autoDetectColumns(sourceAParsed.headers, sourceAParsed.rows);
+    const sourceBAutoMapping = autoDetectColumns(sourceBParsed.headers, sourceBParsed.rows);
+
+    // Actualizar sesión con datos parseados
+    session.sourceAHeaders = sourceAParsed.headers;
+    session.sourceARows = sourceAParsed.rows;
+    session.sourceBHeaders = sourceBParsed.headers;
+    session.sourceBRows = sourceBParsed.rows;
+    session.sourceAAutoMapping = sourceAAutoMapping;
+    session.sourceBAutoMapping = sourceBAutoMapping;
+    sessions.set(sessionId, session);
+
+    res.json({
+      sessionId,
+      reconciliationType: session.reconciliationType,
+      sourceAPreview: {
+        headers: sourceAParsed.headers,
+        sampleRows: sourceAParsed.rows,
+        totalRows: sourceAParsed.rows.length,
+      },
+      sourceBPreview: {
+        headers: sourceBParsed.headers,
+        sampleRows: sourceBParsed.rows,
+        totalRows: sourceBParsed.rows.length,
+      },
+      sourceAAutoMapping,
+      sourceBAutoMapping,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 async function parseFile(
-  file: Express.Multer.File
+  file: Express.Multer.File,
+  sheetIndex: number = 0
 ): Promise<{ headers: string[]; rows: string[][] }> {
   const ext = path.extname(file.originalname).toLowerCase();
-  console.log(`[PARSE FILE] ext=${ext}, file=${file.originalname}, typeof readExcelFull=${typeof readExcelFull}`);
-
-  if (ext === '.xlsx' || ext === '.xls') {
-    console.log('[PARSE FILE] >>> Llamando readExcelFull...');
-    const result = await readExcelFull(file.path);
-    console.log(`[PARSE FILE] <<< readExcelFull retornó ${result.rows.length} filas`);
-    return result;
-  }
-
-  if (ext === '.csv') {
-    const parsed = parseCsvFile(file.path);
-    return { headers: parsed.headers, rows: parsed.rows };
-  }
-
-  if (ext === '.pdf') {
-    const parsed = await parsePdfFile(file.path);
-    return { headers: parsed.headers, rows: parsed.rows };
-  }
-
-  throw new Error(`Formato de archivo no soportado: ${ext}`);
+  return parseFileByPath(file.path, sheetIndex, ext);
 }
 
+async function parseFileByPath(
+  filePath: string,
+  sheetIndex: number = 0,
+  ext?: string
+): Promise<{ headers: string[]; rows: string[][] }> {
+  const fileExt = ext || path.extname(filePath).toLowerCase();
+
+  if (fileExt === '.xlsx') {
+    return readExcelFull(filePath, sheetIndex);
+  }
+
+  if (fileExt === '.xls') {
+    return readXlsFile(filePath, sheetIndex);
+  }
+
+  if (fileExt === '.csv') {
+    const parsed = parseCsvFile(filePath);
+    return { headers: parsed.headers, rows: parsed.rows };
+  }
+
+  if (fileExt === '.pdf') {
+    const parsed = await parsePdfFile(filePath);
+    return { headers: parsed.headers, rows: parsed.rows };
+  }
+
+  throw new Error(`Formato de archivo no soportado: ${fileExt}`);
+}
 
 /**
  * Filtra filas que no son transacciones reales.
  * Una transacción válida debe tener al menos una fecha Y un monto numérico.
- * Esto elimina: encabezados de página repetidos, nombre empresa, NIT, periodo,
- * "Pag: 2", "Impreso Por:", sub-cuentas, "SALDO ANTERIOR", etc.
  */
-function filterDataRows(headers: string[], rows: string[][], label: string): string[][] {
+function filterDataRows(headers: string[], rows: string[][]): string[][] {
   const headerFP = headers.map(h => h.toLowerCase().trim()).join('|');
-  const before = rows.length;
 
-  const filtered = rows.filter((row, idx) => {
+  return rows.filter((row) => {
     // Descartar encabezados repetidos (exports multi-página)
     if (row.map(c => c.toLowerCase().trim()).join('|') === headerFP) {
-      console.log(`[FILTER ${label}] Fila ${idx}: HEADER REPETIDO → descartada`);
       return false;
     }
 
     // Debe tener fecha + monto
     let hasDate = false;
     let hasAmount = false;
-    let dateVal = '';
-    let amountVal = '';
 
     for (const cell of row) {
       const v = (cell ?? '').trim();
       if (!v) continue;
 
       if (!hasDate) {
-        // DD/MM/YYYY, YYYY-MM-DD, YYYY/MM/DD
-        if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(v) ||
+        if (/^\d{1,2}[\/-]\d{1,2}([\/-]\d{2,4})?$/.test(v) ||
             /^\d{4}[\/-]\d{1,2}[\/-]\d{1,2}$/.test(v)) {
           hasDate = true;
-          dateVal = v;
         }
       }
 
       if (!hasAmount) {
-        // Número con separadores de miles/decimales, al menos 2 dígitos
         if (/^-?[\d.,]+$/.test(v) && (v.match(/\d/g) || []).length >= 2) {
           hasAmount = true;
-          amountVal = v;
         }
       }
 
       if (hasDate && hasAmount) return true;
     }
 
-    const nonEmpty = row.filter(c => (c ?? '').trim()).join(' | ');
-    console.log(`[FILTER ${label}] Fila ${idx}: DESCARTADA (date=${hasDate}[${dateVal}] amount=${hasAmount}[${amountVal}]) | ${nonEmpty}`);
     return false;
   });
-
-  console.log(`[FILTER ${label}] ${before} filas → ${filtered.length} filas (${before - filtered.length} descartadas)`);
-  // Mostrar las últimas 3 filas que pasaron el filtro
-  const last3 = filtered.slice(-3);
-  last3.forEach((row, i) => {
-    console.log(`[FILTER ${label}] Última fila ${filtered.length - last3.length + i}: ${row.filter(c => (c ?? '').trim()).join(' | ')}`);
-  });
-  return filtered;
 }

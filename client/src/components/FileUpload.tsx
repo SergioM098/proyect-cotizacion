@@ -1,34 +1,36 @@
 import { useState, useCallback } from 'react';
 import type { ReconciliationType } from '@shared/types';
 import { RECONCILIATION_LABELS } from '@shared/types';
-import type { UploadResult } from '../services/api';
+import type { UploadFileResult } from '../services/api';
 import { uploadFiles } from '../services/api';
 
 interface FileUploadProps {
   reconciliationType: ReconciliationType;
-  onComplete: (data: UploadResult) => void;
+  onComplete: (data: UploadFileResult) => void;
 }
 
 export function FileUpload({ reconciliationType, onComplete }: FileUploadProps) {
   const labels = RECONCILIATION_LABELS[reconciliationType];
   const [sourceAFile, setSourceAFile] = useState<File | null>(null);
   const [sourceBFile, setSourceBFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!sourceAFile || !sourceBFile) return;
 
-    setLoading(true);
+    setLoadingStep('Subiendo archivos...');
     setError(null);
 
     try {
+      await new Promise(r => setTimeout(r, 50));
+      setLoadingStep('Analizando y detectando columnas...');
       const result = await uploadFiles(sourceAFile, sourceBFile, reconciliationType);
       onComplete(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
-      setLoading(false);
+      setLoadingStep(null);
     }
   };
 
@@ -60,10 +62,17 @@ export function FileUpload({ reconciliationType, onComplete }: FileUploadProps) 
       <div className="flex justify-center">
         <button
           onClick={handleSubmit}
-          disabled={!sourceAFile || !sourceBFile || loading}
+          disabled={!sourceAFile || !sourceBFile || !!loadingStep}
           className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {loading ? 'Procesando archivos...' : 'Subir y continuar'}
+          {loadingStep ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="spinner" />
+              {loadingStep}
+            </span>
+          ) : (
+            'Subir y continuar'
+          )}
         </button>
       </div>
     </div>

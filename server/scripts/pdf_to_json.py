@@ -16,15 +16,27 @@ PAGE_FOOTER_PATTERNS = [
     re.compile(r"^p[aá]gina\s*\d+\s*de\s*\d+$", re.IGNORECASE),
     re.compile(r"^\d+\s*de\s*\d+$"),  # "1 de 2"
     re.compile(r"^p[aá]g\.?\s*\d+", re.IGNORECASE),  # "Pág 1", "Pag. 2"
+    re.compile(r"^p[aá]gina:?\s*\d+$", re.IGNORECASE),  # "PÁGINA: 1", "PÁGINA 3"
+]
+
+# Marcadores que identifican líneas de pie de página genéricas (contacto, legal, URLs)
+FOOTER_TEXT_MARKERS = [
+    "www.", "defensor", "dcf:", "marca registrada",
+    "canales de atenci", "servicio al cliente", "centro de ayuda",
+    "correo electr", "horario de",
 ]
 
 
 def is_footer_row(words: list[dict]) -> bool:
-    """Determina si un grupo de palabras es un pie de página (ej: 'Página 1 de 2')."""
+    """Determina si un grupo de palabras es un pie de página."""
     text = " ".join(w["text"] for w in words).strip()
     for pattern in PAGE_FOOTER_PATTERNS:
         if pattern.search(text):
             return True
+    # Detectar líneas de contacto/legal/URLs que aparecen al pie de cada página
+    text_lower = text.lower()
+    if any(marker in text_lower for marker in FOOTER_TEXT_MARKERS):
+        return True
     return False
 
 
@@ -157,6 +169,7 @@ def _extract_tables_from_pdf(pdf) -> dict:
 
     transactions: list[list[str]] = []
     current_cells: list[str] = [""] * num_cols
+    prev_y: float | None = None
 
     for y in data_ys:
         words_in_row = sorted(row_groups[y], key=lambda w: w["x0"])
@@ -166,6 +179,11 @@ def _extract_tables_from_pdf(pdf) -> dict:
         first_col_limit = columns[0]["x_end"] + 5 if len(columns) > 1 else columns[0]["x_end"] + 20
         first_col_words = [w for w in words_in_row if w["x0"] < first_col_limit]
         is_new_row = len(first_col_words) > 0
+
+        # Salto de página: si el gap Y es enorme (>50px normal = ~5 filas),
+        # forzar nueva fila para no fusionar contenido entre páginas
+        if not is_new_row and prev_y is not None and (y - prev_y) > 50:
+            is_new_row = True
 
         # Filas de resumen/totales que no empiezan en la primera columna
         # deben tratarse como filas nuevas para no fusionarse con la anterior
@@ -191,6 +209,8 @@ def _extract_tables_from_pdf(pdf) -> dict:
             # Guardar fila anterior
             transactions.append([c.strip() for c in current_cells])
             current_cells = [""] * num_cols
+
+        prev_y = y
 
         # Asignar cada palabra a su columna
         for w in words_in_row:
@@ -226,6 +246,7 @@ def _extract_tables_from_pdf(pdf) -> dict:
         "total", "subtotal", "sub-total", "saldo anterior", "saldo final",
         "saldo inicial", "total movimiento", "total general", "gran total",
         "totales", "saldo disponible", "saldo a la fecha",
+        "fin estado de cuenta", "estado de cuenta",
     ]
 
     # Texto normalizado de los headers para detectar repeticiones
