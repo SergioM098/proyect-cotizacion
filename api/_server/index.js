@@ -163,7 +163,7 @@ async function parsePdfWithNode(filePath) {
 }
 function parseDateLedRows(lines) {
   const rows = [];
-  const datePattern = /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$|^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/;
+  const datePattern = /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$|^\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/;
   for (let index = 0; index < lines.length; index++) {
     const date = lines[index].trim();
     if (!datePattern.test(date)) continue;
@@ -482,7 +482,7 @@ function normalizeAmount(value) {
 }
 function autoDetectColumns(headers, sampleRows) {
   const mapping = {};
-  const lower = headers.map((h) => h.toLowerCase().trim());
+  const lower = headers.map(normalizeText);
   const dateKeywords = ["fecha", "date", "fec", "dia"];
   const dateIdx = lower.findIndex(
     (h) => dateKeywords.some((k) => h.includes(k))
@@ -529,7 +529,61 @@ function autoDetectColumns(headers, sampleRows) {
     );
     if (amountIdx !== -1) mapping.amount = amountIdx;
   }
+  inferMissingColumnsFromRows(mapping, headers, sampleRows);
   return mapping;
+}
+function inferMissingColumnsFromRows(mapping, headers, sampleRows) {
+  if (!sampleRows || sampleRows.length === 0 || headers.length === 0) return;
+  const rows = sampleRows.slice(0, 30);
+  if (mapping.date === void 0) {
+    const dateIdx = bestColumnIndex(headers, rows, looksLikeDate);
+    if (dateIdx !== -1) mapping.date = dateIdx;
+  }
+  if (mapping.amount === void 0 && mapping.debit === void 0 && mapping.credit === void 0) {
+    const amountIdx = bestColumnIndex(headers, rows, looksLikeAmount);
+    if (amountIdx !== -1) mapping.amount = amountIdx;
+  }
+  if (mapping.description === void 0) {
+    let bestIdx = -1;
+    let bestScore = 0;
+    for (let col = 0; col < headers.length; col++) {
+      if (col === mapping.date || col === mapping.amount || col === mapping.debit || col === mapping.credit) {
+        continue;
+      }
+      const values = rows.map((row) => row[col] ?? "").filter(Boolean);
+      const textValues = values.filter((value) => /[a-zA-Z]/.test(value) && !looksLikeAmount(value));
+      const avgLength = textValues.reduce((sum, value) => sum + value.length, 0) / Math.max(textValues.length, 1);
+      const score = textValues.length * 2 + avgLength;
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = col;
+      }
+    }
+    if (bestIdx !== -1) mapping.description = bestIdx;
+  }
+}
+function bestColumnIndex(headers, rows, predicate) {
+  let bestIdx = -1;
+  let bestScore = 0;
+  for (let col = 0; col < headers.length; col++) {
+    const score = rows.reduce((count, row) => count + (predicate(row[col] ?? "") ? 1 : 0), 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = col;
+    }
+  }
+  return bestScore >= Math.max(2, Math.ceil(rows.length * 0.25)) ? bestIdx : -1;
+}
+function looksLikeDate(value) {
+  const trimmed = value.trim();
+  return /^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(trimmed) || /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(trimmed) || /^\d{1,2}[\/\-]\d{1,2}$/.test(trimmed);
+}
+function looksLikeAmount(value) {
+  const cleaned = value.trim().replace(/[$\s]/g, "");
+  return /^-?\d[\d.,]*$/.test(cleaned) && (cleaned.match(/\d/g) || []).length >= 2;
+}
+function normalizeText(value) {
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/Ã¡/g, "a").replace(/Ã©/g, "e").replace(/Ã­/g, "i").replace(/Ã³/g, "o").replace(/Ãº/g, "u").replace(/Ã±/g, "n").trim();
 }
 
 // src/utils/excel-full-reader.ts

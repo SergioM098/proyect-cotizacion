@@ -144,7 +144,7 @@ async function parsePdfWithNode(filePath: string): Promise<ParsedPdf> {
 
 function parseDateLedRows(lines: string[]): string[][] {
   const rows: string[][] = [];
-  const datePattern = /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$|^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/;
+  const datePattern = /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$|^\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/;
 
   for (let index = 0; index < lines.length; index++) {
     const date = lines[index].trim();

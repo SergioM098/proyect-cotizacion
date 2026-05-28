@@ -156,7 +156,7 @@ function normalizeAmount(value: string): number {
  */
 export function autoDetectColumns(headers: string[], sampleRows?: string[][]): Partial<ColumnMapping> {
   const mapping: Partial<ColumnMapping> = {};
-  const lower = headers.map((h) => h.toLowerCase().trim());
+  const lower = headers.map(normalizeText);
 
   // Fecha
   const dateKeywords = ['fecha', 'date', 'fec', 'dia'];
@@ -219,5 +219,97 @@ export function autoDetectColumns(headers: string[], sampleRows?: string[][]): P
     if (amountIdx !== -1) mapping.amount = amountIdx;
   }
 
+  inferMissingColumnsFromRows(mapping, headers, sampleRows);
+
   return mapping;
+}
+
+function inferMissingColumnsFromRows(
+  mapping: Partial<ColumnMapping>,
+  headers: string[],
+  sampleRows?: string[][]
+): void {
+  if (!sampleRows || sampleRows.length === 0 || headers.length === 0) return;
+
+  const rows = sampleRows.slice(0, 30);
+
+  if (mapping.date === undefined) {
+    const dateIdx = bestColumnIndex(headers, rows, looksLikeDate);
+    if (dateIdx !== -1) mapping.date = dateIdx;
+  }
+
+  if (mapping.amount === undefined && mapping.debit === undefined && mapping.credit === undefined) {
+    const amountIdx = bestColumnIndex(headers, rows, looksLikeAmount);
+    if (amountIdx !== -1) mapping.amount = amountIdx;
+  }
+
+  if (mapping.description === undefined) {
+    let bestIdx = -1;
+    let bestScore = 0;
+
+    for (let col = 0; col < headers.length; col++) {
+      if (col === mapping.date || col === mapping.amount || col === mapping.debit || col === mapping.credit) {
+        continue;
+      }
+
+      const values = rows.map((row) => row[col] ?? '').filter(Boolean);
+      const textValues = values.filter((value) => /[a-zA-Z]/.test(value) && !looksLikeAmount(value));
+      const avgLength = textValues.reduce((sum, value) => sum + value.length, 0) / Math.max(textValues.length, 1);
+      const score = textValues.length * 2 + avgLength;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = col;
+      }
+    }
+
+    if (bestIdx !== -1) mapping.description = bestIdx;
+  }
+}
+
+function bestColumnIndex(
+  headers: string[],
+  rows: string[][],
+  predicate: (value: string) => boolean
+): number {
+  let bestIdx = -1;
+  let bestScore = 0;
+
+  for (let col = 0; col < headers.length; col++) {
+    const score = rows.reduce((count, row) => count + (predicate(row[col] ?? '') ? 1 : 0), 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = col;
+    }
+  }
+
+  return bestScore >= Math.max(2, Math.ceil(rows.length * 0.25)) ? bestIdx : -1;
+}
+
+function looksLikeDate(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    /^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(trimmed) ||
+    /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(trimmed) ||
+    /^\d{1,2}[\/\-]\d{1,2}$/.test(trimmed)
+  );
+}
+
+function looksLikeAmount(value: string): boolean {
+  const cleaned = value.trim().replace(/[$\s]/g, '');
+  return /^-?\d[\d.,]*$/.test(cleaned) && (cleaned.match(/\d/g) || []).length >= 2;
+}
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/Ã¡/g, 'a')
+    .replace(/Ã©/g, 'e')
+    .replace(/Ã­/g, 'i')
+    .replace(/Ã³/g, 'o')
+    .replace(/Ãº/g, 'u')
+    .replace(/Ã±/g, 'n')
+    .trim();
 }
