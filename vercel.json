@@ -3,19 +3,19 @@
   "buildCommand": "npm run build",
   "outputDirectory": "client/dist",
   "functions": {
-    "api/[...path].ts": {
-      "includeFiles": "server/scripts/**",
+    "api/[...path].js": {
+      "includeFiles": "api/_server/**",
       "maxDuration": 60
     }
   },
   "routes": [
     {
       "src": "/api/health",
-      "dest": "/api/health.ts"
+      "dest": "/api/health.js"
     },
     {
       "src": "/api/(.*)",
-      "dest": "/api/[...path].ts"
+      "dest": "/api/[...path].js"
     },
     {
       "handle": "filesystem"

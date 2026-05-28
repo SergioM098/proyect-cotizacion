@@ -12,7 +12,7 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
-    "build": "npm --prefix client run build && npm --prefix server run build",
+    "build": "npm --prefix client run build && npm --prefix server run build && node scripts/prepare-vercel-api.cjs",
     "start": "node server/dist/index.js"
   },
   "devDependencies": {
