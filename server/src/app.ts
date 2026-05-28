@@ -14,18 +14,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Servir frontend en producción
-const clientDist = path.join(__dirname, '../../client/dist');
-app.use(express.static(clientDist));
-
 // Rutas API
 app.use('/api/upload', uploadRouter);
 app.use('/api', reconciliationRouter);
 
-// Fallback para SPA en producción
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(clientDist, 'index.html'));
-});
+if (!process.env.VERCEL) {
+  // Servir frontend en produccion cuando Express corre como servidor tradicional.
+  const clientDist = path.join(__dirname, '../../client/dist');
+  app.use(express.static(clientDist));
+
+  // Fallback para SPA en produccion.
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 // Manejo de errores
 app.use(errorMiddleware);

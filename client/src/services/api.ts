@@ -1,6 +1,13 @@
-import type { ReconcileRequest, ReconciliationResult, UploadResponse, ColumnMapping, ReconciliationType, WorksheetInfo } from '@shared/types';
+import type {
+  ReconcileRequest,
+  ReconciliationResult,
+  UploadResponse,
+  ColumnMapping,
+  ReconciliationType,
+  WorksheetInfo,
+} from '@shared/types';
 
-const BASE_URL = '/api';
+const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 export interface UploadResult extends UploadResponse {
   sourceAAutoMapping: Partial<ColumnMapping>;
@@ -15,6 +22,29 @@ export interface SheetSelectionResponse {
 }
 
 export type UploadFileResult = UploadResult | SheetSelectionResponse;
+
+async function parseJsonResponse<T>(res: Response): Promise<T> {
+  const text = await res.text();
+
+  if (!text) {
+    throw new Error('El servidor no devolvio respuesta. Verifica que la API este desplegada y configurada.');
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error('La API no devolvio JSON. Verifica la URL del backend en VITE_API_URL.');
+  }
+}
+
+async function parseErrorResponse(res: Response, fallback: string): Promise<Error> {
+  try {
+    const error = await parseJsonResponse<{ error?: string; message?: string }>(res);
+    return new Error(error.error || error.message || fallback);
+  } catch (parseError) {
+    return parseError instanceof Error ? parseError : new Error(fallback);
+  }
+}
 
 export async function uploadFiles(
   sourceAFile: File,
@@ -32,11 +62,10 @@ export async function uploadFiles(
   });
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || 'Error al subir archivos');
+    throw await parseErrorResponse(res, 'Error al subir archivos');
   }
 
-  return res.json();
+  return parseJsonResponse<UploadFileResult>(res);
 }
 
 export async function selectSheets(
@@ -51,11 +80,10 @@ export async function selectSheets(
   });
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || 'Error al seleccionar hojas');
+    throw await parseErrorResponse(res, 'Error al seleccionar hojas');
   }
 
-  return res.json();
+  return parseJsonResponse<UploadResult>(res);
 }
 
 export async function runReconciliation(
@@ -68,11 +96,10 @@ export async function runReconciliation(
   });
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || 'Error al ejecutar conciliación');
+    throw await parseErrorResponse(res, 'Error al ejecutar conciliacion');
   }
 
-  return res.json();
+  return parseJsonResponse<ReconciliationResult>(res);
 }
 
 export function getExportUrl(resultId: string): string {

@@ -1,7 +1,17 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "client/dist",
+  "functions": {
+    "api/[...path].ts": {
+      "includeFiles": "server/scripts/**",
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

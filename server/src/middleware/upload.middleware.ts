@@ -1,4 +1,5 @@
 import multer from 'multer';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -6,7 +7,9 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const uploadsDir = path.join(__dirname, '../../uploads');
+const uploadsDir = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'conciliacion-uploads')
+  : path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
