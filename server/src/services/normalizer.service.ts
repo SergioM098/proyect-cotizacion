@@ -265,6 +265,46 @@ function inferMissingColumnsFromRows(
 
     if (bestIdx !== -1) mapping.description = bestIdx;
   }
+
+  if (mapping.description === undefined) {
+    const fallbackIdx = bestDescriptionFallback(headers, rows, mapping);
+    if (fallbackIdx !== -1) mapping.description = fallbackIdx;
+  }
+}
+
+function bestDescriptionFallback(
+  headers: string[],
+  rows: string[][],
+  mapping: Partial<ColumnMapping>
+): number {
+  let bestIdx = -1;
+  let bestScore = 0;
+
+  for (let col = 0; col < headers.length; col++) {
+    if (col === mapping.date || col === mapping.amount || col === mapping.debit || col === mapping.credit) {
+      continue;
+    }
+
+    const values = rows.map((row) => (row[col] ?? '').trim()).filter(Boolean);
+    const uniqueValues = new Set(values.map((value) => value.toLowerCase()));
+    const avgLength = values.reduce((sum, value) => sum + value.length, 0) / Math.max(values.length, 1);
+    const score = values.length * 3 + uniqueValues.size + avgLength;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = col;
+    }
+  }
+
+  if (bestIdx !== -1) return bestIdx;
+
+  const amountIdx = typeof mapping.amount === 'number' ? mapping.amount : undefined;
+  const dateIdx = typeof mapping.date === 'number' ? mapping.date : undefined;
+  for (let col = 0; col < headers.length; col++) {
+    if (col !== dateIdx && col !== amountIdx) return col;
+  }
+
+  return -1;
 }
 
 function bestColumnIndex(

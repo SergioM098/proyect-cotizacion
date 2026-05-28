@@ -107,6 +107,15 @@ async function parsePdfWithNode(filePath: string): Promise<ParsedPdf> {
     .map((line) => line.trim())
     .filter(Boolean);
 
+  const accountingRows = parseAccountingLedgerRows(lines);
+  if (accountingRows.length > 0) {
+    return {
+      headers: ['Fecha', 'Descripcion', 'Valor'],
+      rows: accountingRows,
+      totalRows: accountingRows.length,
+    };
+  }
+
   const dateLedRows = parseDateLedRows(lines);
   if (dateLedRows.length > 0) {
     return {
@@ -142,6 +151,36 @@ async function parsePdfWithNode(filePath: string): Promise<ParsedPdf> {
   };
 }
 
+function parseAccountingLedgerRows(lines: string[]): string[][] {
+  const rows: string[][] = [];
+  const tdPattern = /^[A-Z]{2}$/;
+  const dateAtStartPattern = /^(\d{1,2}[/-]\d{1,2}[/-]\d{4})/;
+
+  for (let index = 0; index < lines.length - 2; index++) {
+    const detailLine = lines[index].replace(/\s+/g, ' ').trim();
+    const transactionType = lines[index + 1].trim().toUpperCase();
+    const dateLine = lines[index + 2].replace(/\s+/g, ' ').trim();
+
+    if (!tdPattern.test(transactionType)) continue;
+
+    const dateMatch = dateLine.match(dateAtStartPattern);
+    if (!dateMatch) continue;
+    if (isIgnoredPdfLine(detailLine) || /saldo anterior/i.test(detailLine)) continue;
+
+    const extracted = extractTrailingAmount(detailLine);
+    if (!extracted) continue;
+
+    const date = dateMatch[1];
+    const sign = transactionType === 'CE' ? -1 : 1;
+    const amount = applySign(extracted.amount, sign);
+
+    rows.push([date, extracted.description, amount]);
+    index += 2;
+  }
+
+  return rows;
+}
+
 function parseDateLedRows(lines: string[]): string[][] {
   const rows: string[][] = [];
   const datePattern = /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$|^\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/;
@@ -174,6 +213,11 @@ function parseDateLedRows(lines: string[]): string[][] {
   }
 
   return rows;
+}
+
+function applySign(amount: string, sign: 1 | -1): string {
+  const clean = amount.replace(/^-/, '');
+  return sign < 0 ? `-${clean}` : clean;
 }
 
 function extractTrailingAmount(text: string): { description: string; amount: string } | null {

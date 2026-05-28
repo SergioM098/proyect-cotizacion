@@ -14,11 +14,11 @@ type MappingField = 'date' | 'description' | 'reference' | 'amount' | 'debit' | 
 
 const FIELD_LABELS: Record<MappingField, string> = {
   date: 'Fecha',
-  description: 'Descripción',
+  description: 'Descripcion',
   reference: 'Referencia',
   amount: 'Monto',
-  debit: 'Débito',
-  credit: 'Crédito',
+  debit: 'Debito',
+  credit: 'Credito',
 };
 
 const FIELD_COLORS: Record<MappingField, string> = {
@@ -30,16 +30,17 @@ const FIELD_COLORS: Record<MappingField, string> = {
   credit: 'bg-emerald-900/40 text-emerald-400 border-emerald-800/50',
 };
 
+const MAPPING_FIELDS: MappingField[] = ['date', 'description', 'reference', 'amount', 'debit', 'credit'];
+
 export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: ColumnMapperProps) {
   const labels = RECONCILIATION_LABELS[reconciliationType];
   const [loadingStep, setLoadingStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sourceAMapping, setSourceAMapping] = useState<Partial<ColumnMapping>>(uploadData.sourceAAutoMapping ?? {});
+  const [sourceBMapping, setSourceBMapping] = useState<Partial<ColumnMapping>>(uploadData.sourceBAutoMapping ?? {});
 
-  const sourceAMapping = buildColumnMapping(uploadData.sourceAAutoMapping);
-  const sourceBMapping = buildColumnMapping(uploadData.sourceBAutoMapping);
-
-  const sourceAErrors = validateMapping(uploadData.sourceAAutoMapping, labels.sourceA);
-  const sourceBErrors = validateMapping(uploadData.sourceBAutoMapping, labels.sourceB);
+  const sourceAErrors = validateMapping(sourceAMapping, labels.sourceA);
+  const sourceBErrors = validateMapping(sourceBMapping, labels.sourceB);
   const hasErrors = sourceAErrors.length > 0 || sourceBErrors.length > 0;
 
   const handleReconcile = async () => {
@@ -50,12 +51,12 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
 
     try {
       await new Promise(r => setTimeout(r, 50));
-      setLoadingStep('Ejecutando conciliación...');
+      setLoadingStep('Ejecutando conciliacion...');
       const result = await runReconciliation({
         sessionId: uploadData.sessionId,
         reconciliationType,
-        sourceAMapping,
-        sourceBMapping,
+        sourceAMapping: toColumnMapping(sourceAMapping),
+        sourceBMapping: toColumnMapping(sourceBMapping),
         amountTolerance: 0.01,
       });
       setLoadingStep('Preparando resultados...');
@@ -74,7 +75,8 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
         subtitle={`${uploadData.sourceAPreview.totalRows} filas detectadas`}
         headers={uploadData.sourceAPreview.headers}
         sampleRows={uploadData.sourceAPreview.sampleRows}
-        autoMapping={uploadData.sourceAAutoMapping}
+        mapping={sourceAMapping}
+        onMappingChange={setSourceAMapping}
         errors={sourceAErrors}
       />
 
@@ -83,7 +85,8 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
         subtitle={`${uploadData.sourceBPreview.totalRows} filas detectadas`}
         headers={uploadData.sourceBPreview.headers}
         sampleRows={uploadData.sourceBPreview.sampleRows}
-        autoMapping={uploadData.sourceBAutoMapping}
+        mapping={sourceBMapping}
+        onMappingChange={setSourceBMapping}
         errors={sourceBErrors}
       />
 
@@ -105,7 +108,7 @@ export function ColumnMapper({ uploadData, reconciliationType, onReconcile }: Co
               {loadingStep}
             </span>
           ) : (
-            'Ejecutar conciliación'
+            'Ejecutar conciliacion'
           )}
         </button>
       </div>
@@ -118,30 +121,34 @@ function MappingSection({
   subtitle,
   headers,
   sampleRows,
-  autoMapping,
+  mapping,
+  onMappingChange,
   errors,
 }: {
   title: string;
   subtitle: string;
   headers: string[];
   sampleRows: string[][];
-  autoMapping: Partial<ColumnMapping>;
+  mapping: Partial<ColumnMapping>;
+  onMappingChange: (mapping: Partial<ColumnMapping>) => void;
   errors: string[];
 }) {
-  // Build a reverse map: column index → field name
   const columnToField = new Map<number, MappingField>();
-  for (const [field, colIndex] of Object.entries(autoMapping)) {
+  for (const [field, colIndex] of Object.entries(mapping)) {
     if (colIndex !== undefined) {
       columnToField.set(Number(colIndex), field as MappingField);
     }
   }
 
-  const detectedFields = Object.entries(autoMapping)
-    .filter(([, v]) => v !== undefined)
-    .map(([field, colIndex]) => ({
-      field: field as MappingField,
-      column: headers[Number(colIndex)] || `Columna ${colIndex}`,
-    }));
+  const updateField = (field: MappingField, value: string) => {
+    const next = { ...mapping };
+    if (value === '') {
+      delete next[field];
+    } else {
+      next[field] = Number(value);
+    }
+    onMappingChange(next);
+  };
 
   return (
     <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
@@ -150,28 +157,29 @@ function MappingSection({
         <p className="text-sm text-gray-400">{subtitle}</p>
       </div>
 
-      {/* Campos detectados como badges */}
-      <div className="mb-4">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 select-none">
-          Columnas detectadas
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {detectedFields.map(({ field, column }) => (
-            <span
-              key={field}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${FIELD_COLORS[field]}`}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+        {MAPPING_FIELDS.map((field) => (
+          <label key={field} className="space-y-1">
+            <span className="block text-xs font-medium text-gray-400">{FIELD_LABELS[field]}</span>
+            <select
+              value={mapping[field] ?? ''}
+              onChange={(event) => updateField(field, event.target.value)}
+              className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
-              {FIELD_LABELS[field]}
-              <span className="opacity-60">→</span>
-              {column}
-            </span>
-          ))}
-        </div>
+              <option value="">Sin columna</option>
+              {headers.map((header, index) => (
+                <option key={`${field}-${index}`} value={index}>
+                  {header || `Columna ${index + 1}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
       </div>
 
       {errors.length > 0 && (
         <div className="mb-4 bg-red-950/30 border border-red-800/50 text-red-400 px-4 py-3 rounded-lg text-sm">
-          <p className="font-medium mb-1">No se pudieron detectar columnas requeridas:</p>
+          <p className="font-medium mb-1">Selecciona las columnas requeridas:</p>
           <ul className="list-disc list-inside">
             {errors.map((err, i) => (
               <li key={i}>{err}</li>
@@ -180,7 +188,6 @@ function MappingSection({
         </div>
       )}
 
-      {/* Tabla de preview con columnas resaltadas */}
       <div className="overflow-auto max-h-[600px] rounded-lg border border-gray-800">
         <table className="text-sm w-full">
           <thead className="sticky top-0 z-10">
@@ -196,7 +203,7 @@ function MappingSection({
                         : 'text-gray-500'
                     }`}
                   >
-                    {h}
+                    {h || `Columna ${i + 1}`}
                     {mappedField && (
                       <span className="block text-[10px] font-normal opacity-70 mt-0.5">
                         {FIELD_LABELS[mappedField]}
@@ -210,16 +217,16 @@ function MappingSection({
           <tbody>
             {sampleRows.map((row, ri) => (
               <tr key={ri} className={ri % 2 === 0 ? 'bg-gray-900' : 'bg-gray-800/30'}>
-                {row.map((cell, ci) => {
+                {headers.map((_, ci) => {
                   const mappedField = columnToField.get(ci);
                   return (
                     <td
                       key={ci}
-                      className={`px-3 py-1.5 truncate max-w-[200px] ${
+                      className={`px-3 py-1.5 truncate max-w-[220px] ${
                         mappedField ? 'text-gray-200 font-medium' : 'text-gray-500'
                       }`}
                     >
-                      {cell}
+                      {row[ci] ?? ''}
                     </td>
                   );
                 })}
@@ -232,35 +239,28 @@ function MappingSection({
   );
 }
 
-function validateMapping(
-  auto: Partial<ColumnMapping> | undefined,
-  sourceName: string
-): string[] {
+function validateMapping(mapping: Partial<ColumnMapping> | undefined, sourceName: string): string[] {
   const errors: string[] = [];
-  if (!auto) {
+  if (!mapping) {
     errors.push(`No se pudo detectar ninguna columna en ${sourceName}`);
     return errors;
   }
-  if (auto.date === undefined) {
-    errors.push('Fecha');
+  if (mapping.date === undefined) {
+    errors.push(`${sourceName}: Fecha`);
   }
-  if (auto.description === undefined) {
-    errors.push('Descripción');
+  if (mapping.description === undefined) {
+    errors.push(`${sourceName}: Descripcion`);
   }
-  if (auto.amount === undefined && auto.debit === undefined && auto.credit === undefined) {
-    errors.push('Monto (o Débito/Crédito)');
+  if (mapping.amount === undefined && mapping.debit === undefined && mapping.credit === undefined) {
+    errors.push(`${sourceName}: Monto (o Debito/Credito)`);
   }
   return errors;
 }
 
-function buildColumnMapping(auto: Partial<ColumnMapping> | undefined): ColumnMapping {
-  const mapping: ColumnMapping = {
-    date: auto?.date ?? 0,
-    description: auto?.description ?? 1,
+function toColumnMapping(mapping: Partial<ColumnMapping>): ColumnMapping {
+  return {
+    ...mapping,
+    date: mapping.date ?? 0,
+    description: mapping.description ?? 1,
   };
-  if (auto?.reference !== undefined) mapping.reference = auto.reference;
-  if (auto?.amount !== undefined) mapping.amount = auto.amount;
-  if (auto?.debit !== undefined) mapping.debit = auto.debit;
-  if (auto?.credit !== undefined) mapping.credit = auto.credit;
-  return mapping;
 }

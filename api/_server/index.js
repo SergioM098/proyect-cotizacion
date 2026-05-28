@@ -136,6 +136,14 @@ function parsePdfWithPython(filePath) {
 async function parsePdfWithNode(filePath) {
   const data = await pdfParse(fs2.readFileSync(filePath));
   const lines = data.text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const accountingRows = parseAccountingLedgerRows(lines);
+  if (accountingRows.length > 0) {
+    return {
+      headers: ["Fecha", "Descripcion", "Valor"],
+      rows: accountingRows,
+      totalRows: accountingRows.length
+    };
+  }
   const dateLedRows = parseDateLedRows(lines);
   if (dateLedRows.length > 0) {
     return {
@@ -161,6 +169,28 @@ async function parsePdfWithNode(filePath) {
     totalRows: normalizedRows.length
   };
 }
+function parseAccountingLedgerRows(lines) {
+  const rows = [];
+  const tdPattern = /^[A-Z]{2}$/;
+  const dateAtStartPattern = /^(\d{1,2}[/-]\d{1,2}[/-]\d{4})/;
+  for (let index = 0; index < lines.length - 2; index++) {
+    const detailLine = lines[index].replace(/\s+/g, " ").trim();
+    const transactionType = lines[index + 1].trim().toUpperCase();
+    const dateLine = lines[index + 2].replace(/\s+/g, " ").trim();
+    if (!tdPattern.test(transactionType)) continue;
+    const dateMatch = dateLine.match(dateAtStartPattern);
+    if (!dateMatch) continue;
+    if (isIgnoredPdfLine(detailLine) || /saldo anterior/i.test(detailLine)) continue;
+    const extracted = extractTrailingAmount(detailLine);
+    if (!extracted) continue;
+    const date = dateMatch[1];
+    const sign = transactionType === "CE" ? -1 : 1;
+    const amount = applySign(extracted.amount, sign);
+    rows.push([date, extracted.description, amount]);
+    index += 2;
+  }
+  return rows;
+}
 function parseDateLedRows(lines) {
   const rows = [];
   const datePattern = /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$|^\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/;
@@ -185,6 +215,10 @@ function parseDateLedRows(lines) {
     rows.push([date, description, amount]);
   }
   return rows;
+}
+function applySign(amount, sign) {
+  const clean = amount.replace(/^-/, "");
+  return sign < 0 ? `-${clean}` : clean;
 }
 function extractTrailingAmount(text) {
   const match = text.match(/(-?\$?[\d.,]+)$/);
@@ -561,6 +595,34 @@ function inferMissingColumnsFromRows(mapping, headers, sampleRows) {
     }
     if (bestIdx !== -1) mapping.description = bestIdx;
   }
+  if (mapping.description === void 0) {
+    const fallbackIdx = bestDescriptionFallback(headers, rows, mapping);
+    if (fallbackIdx !== -1) mapping.description = fallbackIdx;
+  }
+}
+function bestDescriptionFallback(headers, rows, mapping) {
+  let bestIdx = -1;
+  let bestScore = 0;
+  for (let col = 0; col < headers.length; col++) {
+    if (col === mapping.date || col === mapping.amount || col === mapping.debit || col === mapping.credit) {
+      continue;
+    }
+    const values = rows.map((row) => (row[col] ?? "").trim()).filter(Boolean);
+    const uniqueValues = new Set(values.map((value) => value.toLowerCase()));
+    const avgLength = values.reduce((sum, value) => sum + value.length, 0) / Math.max(values.length, 1);
+    const score = values.length * 3 + uniqueValues.size + avgLength;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = col;
+    }
+  }
+  if (bestIdx !== -1) return bestIdx;
+  const amountIdx = typeof mapping.amount === "number" ? mapping.amount : void 0;
+  const dateIdx = typeof mapping.date === "number" ? mapping.date : void 0;
+  for (let col = 0; col < headers.length; col++) {
+    if (col !== dateIdx && col !== amountIdx) return col;
+  }
+  return -1;
 }
 function bestColumnIndex(headers, rows, predicate) {
   let bestIdx = -1;
