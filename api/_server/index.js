@@ -135,7 +135,15 @@ function parsePdfWithPython(filePath) {
 }
 async function parsePdfWithNode(filePath) {
   const data = await pdfParse(fs2.readFileSync(filePath));
-  const lines = data.text.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const lines = data.text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const dateLedRows = parseDateLedRows(lines);
+  if (dateLedRows.length > 0) {
+    return {
+      headers: ["Fecha", "Descripcion", "Valor"],
+      rows: dateLedRows,
+      totalRows: dateLedRows.length
+    };
+  }
   const rows = lines.map(splitPdfLine).filter((row) => row.length >= 2 && row.some((cell) => cell.trim() !== ""));
   if (rows.length === 0) {
     throw new Error(
@@ -152,6 +160,79 @@ async function parsePdfWithNode(filePath) {
     rows: normalizedRows,
     totalRows: normalizedRows.length
   };
+}
+function parseDateLedRows(lines) {
+  const rows = [];
+  const datePattern = /^\d{4}[/-]\d{1,2}[/-]\d{1,2}$|^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/;
+  for (let index = 0; index < lines.length; index++) {
+    const date = lines[index].trim();
+    if (!datePattern.test(date)) continue;
+    const parts = [];
+    index++;
+    while (index < lines.length && !datePattern.test(lines[index].trim())) {
+      const line = lines[index].replace(/\s+/g, " ").trim();
+      if (line && !isIgnoredPdfLine(line)) {
+        parts.push(line);
+      }
+      index++;
+    }
+    index--;
+    const text = parts.join(" ").replace(/\s+/g, " ").trim();
+    const extracted = extractTrailingAmount(text);
+    if (!extracted) continue;
+    const { amount, description } = extracted;
+    if (!description) continue;
+    rows.push([date, description, amount]);
+  }
+  return rows;
+}
+function extractTrailingAmount(text) {
+  const match = text.match(/(-?\$?[\d.,]+)$/);
+  if (!match || match.index === void 0) return null;
+  let amount = match[1].replace("$", "").trim();
+  let description = text.slice(0, match.index).trim();
+  if (!amount.startsWith("-")) {
+    const normalizedAmount = splitReferenceFromPositiveAmount(amount);
+    if (normalizedAmount !== amount) {
+      description = `${description}${amount.slice(0, amount.length - normalizedAmount.length)}`.trim();
+      amount = normalizedAmount;
+    }
+  }
+  return { description, amount };
+}
+function splitReferenceFromPositiveAmount(value) {
+  const decimalMatch = value.match(/^(\d+)((?:,\d{3})+\.\d{2})$/);
+  if (!decimalMatch) return value;
+  const prefix = decimalMatch[1];
+  const rest = decimalMatch[2];
+  if (prefix.length <= 3) return value;
+  const preferredReferenceLength = prefix.startsWith("8") || prefix.startsWith("9") ? 9 : 10;
+  const firstGroupLength = prefix.length - preferredReferenceLength;
+  if (firstGroupLength >= 1 && firstGroupLength <= 3) {
+    return `${prefix.slice(preferredReferenceLength)}${rest}`;
+  }
+  for (const referenceLength of [9, 10, 8, 7]) {
+    const groupLength = prefix.length - referenceLength;
+    if (groupLength >= 1 && groupLength <= 3) {
+      return `${prefix.slice(referenceLength)}${rest}`;
+    }
+  }
+  return value;
+}
+function isIgnoredPdfLine(line) {
+  const lower = line.toLowerCase();
+  return [
+    "empresa:",
+    "numero de cuenta:",
+    "n\xFAmero de cuenta:",
+    "fecha y hora",
+    "nit:",
+    "tipo de cuenta:",
+    "impreso por:",
+    "saldo efectivo",
+    "saldo en canje",
+    "saldo total"
+  ].some((marker) => lower.includes(marker));
 }
 function splitPdfLine(line) {
   const wideSplit = line.split(/\s{2,}|\t+/).map((cell) => cell.trim()).filter(Boolean);
