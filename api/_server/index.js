@@ -61,6 +61,7 @@ var upload = multer({
 import { execFile } from "child_process";
 import fs2 from "fs";
 import path2 from "path";
+import pdfParse from "pdf-parse";
 import { fileURLToPath as fileURLToPath2 } from "url";
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = path2.dirname(__filename2);
@@ -75,10 +76,24 @@ function resolvePythonScript() {
 }
 var PYTHON_SCRIPT = resolvePythonScript();
 var PYTHON_COMMANDS = process.platform === "win32" ? ["python", "py"] : ["python3", "python"];
-function parsePdfFile(filePath) {
+async function parsePdfFile(filePath) {
+  if (process.env.VERCEL) {
+    return parsePdfWithNode(filePath);
+  }
+  try {
+    return await parsePdfWithPython(filePath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT") || message.includes("no se encontro")) {
+      return parsePdfWithNode(filePath);
+    }
+    throw error;
+  }
+}
+function parsePdfWithPython(filePath) {
   return new Promise((resolve, reject) => {
     if (!PYTHON_SCRIPT) {
-      reject(new Error("Error al parsear PDF: no se encontr\xF3 server/scripts/pdf_to_json.py"));
+      reject(new Error("Error al parsear PDF: no se encontro server/scripts/pdf_to_json.py"));
       return;
     }
     const runPython = (commandIndex) => {
@@ -117,6 +132,74 @@ function parsePdfFile(filePath) {
     };
     runPython(0);
   });
+}
+async function parsePdfWithNode(filePath) {
+  const data = await pdfParse(fs2.readFileSync(filePath));
+  const lines = data.text.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const rows = lines.map(splitPdfLine).filter((row) => row.length >= 2 && row.some((cell) => cell.trim() !== ""));
+  if (rows.length === 0) {
+    throw new Error(
+      "No se pudo extraer texto tabular del PDF. En Vercel se usa un parser JavaScript; para PDFs escaneados o tablas complejas sube CSV/XLSX."
+    );
+  }
+  const headerIndex = findHeaderIndex(rows);
+  const dataRows = headerIndex >= 0 ? rows.slice(headerIndex + 1) : rows;
+  const maxCols = Math.max(...rows.map((row) => row.length));
+  const headers = headerIndex >= 0 ? normalizeRow(rows[headerIndex], maxCols) : Array.from({ length: maxCols }, (_, index) => `Columna ${index + 1}`);
+  const normalizedRows = dataRows.map((row) => normalizeRow(row, headers.length));
+  return {
+    headers,
+    rows: normalizedRows,
+    totalRows: normalizedRows.length
+  };
+}
+function splitPdfLine(line) {
+  const wideSplit = line.split(/\s{2,}|\t+/).map((cell) => cell.trim()).filter(Boolean);
+  if (wideSplit.length >= 2) return wideSplit;
+  const dateAmountMatch = line.match(
+    /^(\d{1,4}[/-]\d{1,2}(?:[/-]\d{1,4})?)\s+(.+?)\s+(-?[\d.,]+)$/
+  );
+  if (dateAmountMatch) {
+    return [dateAmountMatch[1], dateAmountMatch[2], dateAmountMatch[3]];
+  }
+  return [line];
+}
+function findHeaderIndex(rows) {
+  const keywords = [
+    "fecha",
+    "date",
+    "descripcion",
+    "descripcion",
+    "detalle",
+    "concepto",
+    "monto",
+    "valor",
+    "debito",
+    "debito",
+    "credito",
+    "credito",
+    "saldo",
+    "referencia",
+    "ref",
+    "documento"
+  ];
+  let bestIndex = -1;
+  let bestScore = 0;
+  const limit = Math.min(rows.length, 30);
+  for (let index = 0; index < limit; index++) {
+    const text = rows[index].join(" ").toLowerCase();
+    const score = keywords.filter((keyword) => text.includes(keyword)).length;
+    if (score >= 2 && score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
+}
+function normalizeRow(row, length) {
+  if (row.length === length) return row;
+  if (row.length > length) return row.slice(0, length);
+  return [...row, ...Array(length - row.length).fill("")];
 }
 
 // src/services/csv-parser.service.ts
