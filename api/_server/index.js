@@ -139,7 +139,18 @@ async function parsePdfWithNode(filePath) {
   const accountingRows = parseAccountingLedgerRows(lines);
   if (accountingRows.length > 0) {
     return {
-      headers: ["Fecha", "Descripcion", "Valor"],
+      headers: [
+        "TD",
+        "Documento.",
+        "Fecha.",
+        "Detalle Transaccion",
+        "Nit CC",
+        "Nombre",
+        "Cheque No.",
+        "Valor Debito",
+        "Valor Credito",
+        "Saldo Final"
+      ],
       rows: accountingRows,
       totalRows: accountingRows.length
     };
@@ -184,12 +195,68 @@ function parseAccountingLedgerRows(lines) {
     const extracted = extractTrailingAmount(detailLine);
     if (!extracted) continue;
     const date = dateMatch[1];
-    const sign = transactionType === "CE" ? -1 : 1;
-    const amount = applySign(extracted.amount, sign);
-    rows.push([date, extracted.description, amount]);
+    const { document, detail } = splitAccountingDetail(extracted.description);
+    const { cheque, balance } = splitAccountingDateLine(dateLine, date);
+    const isDebit = transactionType === "RC";
+    rows.push([
+      transactionType,
+      document,
+      date,
+      detail,
+      "",
+      "",
+      cheque,
+      isDebit ? extracted.amount : "",
+      isDebit ? "" : extracted.amount,
+      balance
+    ]);
     index += 2;
   }
   return rows;
+}
+function splitAccountingDetail(value) {
+  const longNumberWithSpace = value.match(/^(\d{7,})\s+(.+)$/);
+  if (longNumberWithSpace) {
+    const raw = longNumberWithSpace[1];
+    return {
+      document: raw.slice(0, -3),
+      detail: `${raw.slice(-3)} ${longNumberWithSpace[2]}`.trim()
+    };
+  }
+  const longNumberWithText = value.match(/^(\d{7,})([-A-Za-z].*)$/);
+  if (longNumberWithText) {
+    const raw = longNumberWithText[1];
+    return {
+      document: raw.slice(0, -3),
+      detail: `${raw.slice(-3)}${longNumberWithText[2]}`.trim()
+    };
+  }
+  const compactMatch = value.match(/^(\d{4,})([A-Za-z].*)$/);
+  if (compactMatch) {
+    return { document: compactMatch[1], detail: compactMatch[2].trim() };
+  }
+  const spacedMatch = value.match(/^(\d{5,})(\d{3}\s+.+)$/);
+  if (spacedMatch) {
+    return { document: spacedMatch[1].slice(0, -3), detail: `${spacedMatch[1].slice(-3)} ${spacedMatch[2].slice(3)}`.trim() };
+  }
+  const simpleMatch = value.match(/^(\d+)\s+(.+)$/);
+  if (simpleMatch && simpleMatch[1].length <= 6) {
+    return { document: simpleMatch[1], detail: simpleMatch[2].trim() };
+  }
+  return { document: "", detail: value };
+}
+function splitAccountingDateLine(line, date) {
+  const rest = line.slice(date.length).trim();
+  if (!rest) return { cheque: "", balance: "" };
+  const spaced = rest.match(/^(\d+)\s+(-?[\d.,]+)$/);
+  if (spaced) {
+    return { cheque: spaced[1], balance: spaced[2] };
+  }
+  const balanceOnly = rest.match(/^(-?[\d.,]+)$/);
+  if (balanceOnly) {
+    return { cheque: "", balance: balanceOnly[1] };
+  }
+  return { cheque: "", balance: rest };
 }
 function parseDateLedRows(lines) {
   const rows = [];
@@ -215,10 +282,6 @@ function parseDateLedRows(lines) {
     rows.push([date, description, amount]);
   }
   return rows;
-}
-function applySign(amount, sign) {
-  const clean = amount.replace(/^-/, "");
-  return sign < 0 ? `-${clean}` : clean;
 }
 function extractTrailingAmount(text) {
   const match = text.match(/(-?\$?[\d.,]+)$/);
