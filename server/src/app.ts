@@ -14,9 +14,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get(['/api/health', '/health'], (_req, res) => {
+  res.json({ ok: true });
+});
+
 // Rutas API
 app.use('/api/upload', uploadRouter);
 app.use('/api', reconciliationRouter);
+app.use('/upload', uploadRouter);
+app.use('/', reconciliationRouter);
 
 if (!process.env.VERCEL) {
   // Servir frontend en produccion cuando Express corre como servidor tradicional.
